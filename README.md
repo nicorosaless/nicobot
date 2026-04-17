@@ -2,7 +2,7 @@
 
 Un asistente de voz conversacional en tiempo real que combina speech-to-text de última generación, un agente inteligente con capacidad de ejecutar herramientas, y síntesis de voz streaming.
 
-> **Estado del proyecto:** Stack TTS simplificado - usando solo Kokoro (inglés) para fase inicial. Qwen3-TTS MLX validado pero standby. Listo para pipeline STT → TTS.
+> **Estado del proyecto:** Pipeline STT → TTS implementado y funcionando. `spoken_assistant.py` escucha, transcribe (Parakeet v3 ES), traduce (ES→EN), y responde con voz (Kokoro af_bella).
 
 ---
 
@@ -29,10 +29,11 @@ Un asistente de voz conversacional en tiempo real que combina speech-to-text de 
 
 ### 🔄 En Progreso
 
-- **Pipeline STT → Kokoro TTS:**
-  - Integración de Parakeet (STT) con Kokoro (TTS)
-  - Pipeline CLI end-to-end
-  - Output en audio hablado
+- **Pipeline STT → Translate → TTS:** ✅ Implementado
+  - `spoken_assistant.py`: Pipeline completo funcionando
+  - Parakeet v3 (STT español) → Traductor → Kokoro (TTS inglés)
+  - VAD (Voice Activity Detection) para detección de voz
+  - Audio grabado → transcrito → traducido → hablado
 
 ### ⏳ Pendiente
 
@@ -151,6 +152,8 @@ El cerebro del sistema. HERMES es un agente conversacional que:
 nicobot/
 ├── README.md                 # Este archivo
 ├── .gitignore               # Exclusiones de git
+├── spoken_assistant.py      # 🎙️ Pipeline STT → TTS (main)
+├── setup.sh                 # Script de instalación
 ├── docs/
 │   ├── references/          # Referencias visuales (UI)
 │   └── roadmap/             # Documentación de roadmap
@@ -158,51 +161,120 @@ nicobot/
 │   └── voice_preview_cristina.mp3  # Voz de referencia
 ├── scripts/                 # Scripts de utilidad
 │   ├── tts_benchmark.py     # Benchmark comparativo
-│   ├── qwen3_service.py   # Servicio Qwen3-TTS
-│   ├── test_qwen3_mlx.py  # Tests MLX
-│   └── test_qwen3_mlx_4bit.py  # Comparativa 4/6/8-bit
+│   ├── qwen3_service.py     # Servicio Qwen3-TTS
+│   ├── test_qwen3_mlx.py    # Tests MLX
+│   ├── test_qwen3_mlx_4bit.py # Comparativa 4/6/8-bit
+│   └── test_kokoro_english.py # Test voz Kokoro EN
 └── artifacts/               # Artefactos generados (no en git)
-    └── qwen3-mlx-venv/      # Entorno MLX (no en git)
+    └── kokoro-en-test/      # Archivos de audio generados
+```
+
+## 🎙️ Spoken Assistant - Pipeline STT → TTS
+
+El script principal `spoken_assistant.py` implementa un asistente de voz completo:
+
+### Flujo
+1. **Escucha** audio del micrófono con VAD (Voice Activity Detection)
+2. **STT** usando Parakeet v3 (transcripción español)
+3. **Traducción** español → inglés (MarianMT)
+4. **TTS** usando Kokoro voz `af_bella` (síntesis voz femenina en inglés)
+5. **Reproducción** del audio generado
+
+### Uso rápido
+```bash
+# Setup inicial (instala todas las dependencias)
+./setup.sh
+
+# O manualmente:
+python3 -m venv .venv
+source .venv/bin/activate
+pip install kokoro soundfile torch transformers sounddevice
+pip install nemo_toolkit['asr']
+
+# Ejecutar asistente
+python spoken_assistant.py
+```
+
+### Ejemplo de interacción
+```
+🎙️  Escuchando... (habla ahora)
+   ✓ Voz detectada, grabando...
+   📝 Transcribiendo con Parakeet...
+   ✓ Texto (ES): "hola cómo estás"
+   🌐 Traduciendo ES → EN...
+   ✓ Texto (EN): "hello how are you"
+   🔊 Generando audio con Kokoro...
+   ✓ Audio generado: 1.2s
+   🔈 Reproduciendo...
+   ✓ Reproducción completada
 ```
 
 ## Scripts Disponibles
 
-### Benchmark TTS
+### Pipeline Principal
+```bash
+# Asistente de voz completo (STT → Translate → TTS)
+python spoken_assistant.py
+
+# Setup de dependencias
+./setup.sh
+```
+
+### Benchmark TTS (Desarrollo)
 ```bash
 # Comparar motores TTS
 python scripts/tts_benchmark.py
 
-# Test de Qwen3-TTS MLX
-python scripts/test_qwen3_mlx.py
+# Test de Kokoro en inglés
+python scripts/test_kokoro_english.py
 
-# Comparativa 4-bit vs 6-bit vs 8-bit
-python scripts/test_qwen3_mlx_4bit.py
+# Test de Qwen3-TTS MLX (standby)
+python scripts/test_qwen3_mlx.py
 ```
 
-## Instalación
+## 🚀 Instalación Rápida
 
+### Opción 1: Script automático
 ```bash
 # Clonar repositorio
-git clone https://github.com/tuusuario/nicobot.git
+git clone https://github.com/nicorosaless/nicobot.git
 cd nicobot
 
-# Crear entorno virtual (Python 3.12 recomendado)
+# Setup automático (crea .venv e instala todo)
+./setup.sh
+
+# Ejecutar asistente
+source .venv/bin/activate
+python spoken_assistant.py
+```
+
+### Opción 2: Manual
+```bash
+# Clonar repositorio
+git clone https://github.com/nicorosaless/nicobot.git
+cd nicobot
+
+# Crear entorno virtual
 python3.12 -m venv .venv
 source .venv/bin/activate
 
-# Instalar dependencias MLX (para Qwen3-TTS)
-pip install mlx==0.31.1 mlx-lm==0.31.1 mlx-audio
+# Instalar dependencias
+pip install kokoro soundfile torch transformers sounddevice numpy
 
-# Otras dependencias
-pip install soundfile librosa transformers
+# Instalar NeMo para Parakeet (tarda unos minutos)
+pip install nemo_toolkit['asr']
+
+# Ejecutar
+python spoken_assistant.py
 ```
 
 ### Requisitos
 
 - Python 3.10+
-- macOS con Apple Silicon (M1/M2/M3) - para MLX
-- 8GB+ RAM para ejecución local óptima
-- ~6GB libres para modelo Qwen3-TTS
+- macOS con Apple Silicon (M1/M2/M3) o CPU
+- Micrófono funcional
+- 8GB+ RAM recomendado
+- ~2GB libres para modelos (Kokoro + Parakeet)
 
 ## Roadmap
 
@@ -213,10 +285,13 @@ pip install soundfile librosa transformers
 - [x] Validación de velocidad y calidad
 - [x] Limpieza de repositorio y preparación para git
 
-### Fase 2: Pipeline STT → TTS (Actual)
-- [ ] Integración de Parakeet (STT) con Kokoro (TTS)
-- [ ] Pipeline CLI end-to-end funcionando
-- [ ] Tests de integración
+### Fase 2: Pipeline STT → TTS ✅
+- [x] Implementar `spoken_assistant.py` con pipeline completo
+- [x] Parakeet v3 (STT español) integrado
+- [x] Traductor ES→EN (MarianMT) funcionando
+- [x] Kokoro TTS (af_bella inglés) integrado
+- [x] VAD (Voice Activity Detection) para detección de voz
+- [x] Audio grabado → transcrito → traducido → hablado
 
 ### Fase 3: Integración Hermes Agent ⏳
 - [ ] Añadir Hermes Agent al pipeline
@@ -288,4 +363,4 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 ---
 
 **Última actualización:** 17 Abril 2026  
-**Estado:** Fase 1 completada - Stack simplificado (Kokoro único). Fase 2 en progreso: Pipeline STT → TTS.
+**Estado:** Pipeline STT → TTS implementado y funcionando. `spoken_assistant.py` listo para usar.
