@@ -28,13 +28,13 @@ Un asistente de voz conversacional en tiempo real que combina speech-to-text de 
 
 ### 🔄 En Progreso
 
-- **Stack híbrido de TTS:**
+- **Stack híbrido de TTS validado:**
   - Qwen3-TTS MLX: para narración de progreso y mensajes largos
   - Kokoro: para respuestas instantáneas (< 5 palabras)
 
 ### ⏳ Pendiente
 
-- Integración de Kokoro (motor rápido)
+- Pipeline STT → Hermes → TTS completo
 - Pipeline STT → Hermes → TTS completo
 - UI mínima cuadrada con 3 estados
 - Validación de payloads de streaming de Hermes Agent
@@ -63,13 +63,15 @@ Para este producto, la latencia no es un detalle técnico: define la experiencia
 | Fin de habla (VAD) → primer audio TTS (TTFA) | **<800 ms ideal, <1.2 s máximo** |
 | Gaps entre chunks de audio durante streaming | **<120 ms** |
 
-### Stack de TTS Seleccionado
+### Stack de TTS Seleccionado (✅ Validado)
 
-| Escenario | Motor | RTF | Latencia |
-|-----------|-------|-----|----------|
-| Respuestas cortas (< 5 palabras) | **Kokoro** (pendiente) | ~0.1x | ~200ms |
-| Narración de progreso | **Qwen3-TTS MLX** | ~0.7-1.2x | ~2-4s |
-| Mensajes largos (> 15 palabras) | **Qwen3-TTS MLX** | ~0.7x | tiempo real |
+| Escenario | Motor | RTF | Latencia | Voz |
+|-----------|-------|-----|----------|-----|
+| Respuestas cortas (< 5 palabras) | **Kokoro** `ef_dora` | **~0.2x** | ~200-400ms | Femenina español |
+| Narración de progreso | **Qwen3-TTS MLX** | ~0.7-1.2x | ~2-4s | Cristina (clonada) |
+| Mensajes largos (> 15 palabras) | **Qwen3-TTS MLX** | ~0.7x | tiempo real | Cristina (clonada) |
+
+**Nota:** Kokoro usa voces pre-entrenadas (no clonables). Qwen3-TTS usa voz de Cristina clonada con calidad premium.
 
 ### Implicaciones para flujo agentico
 
