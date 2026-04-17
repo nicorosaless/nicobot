@@ -2,121 +2,60 @@
 
 **Estado del documento:** Actualizado  
 **Última actualización:** 17 Abril 2026  
-**Fase actual:** Fase 1 completada - Preparando Fase 2
+**Fase actual:** Fase 1 completada - Usando solo Kokoro (temporal)
 
 ---
 
 ## Resumen Ejecutivo
 
-La Fase 1 (Infraestructura de Voz) ha sido **completada exitosamente**. Se validó el stack de TTS con voz clonada premium usando Qwen3-TTS MLX, alcanzando RTF < 1.0x (más rápido que tiempo real) para frases largas.
+La Fase 1 (Infraestructura de Voz) ha sido **completada exitosamente**. 
 
-**Stack de TTS seleccionado:**
-- **Motor principal:** Qwen3-TTS MLX (voz de Cristina clonada, RTF ~0.7-1.2x)
-- **Motor rápido:** Kokoro (pendiente de integración, RTF ~0.1-0.3x)
+**Stack actual (simplificado):**
+- **Motor único:** Kokoro (voz af_bella, inglés, Grade A)
+- **RTF:** ~0.21x (5× más rápido que tiempo real)
+- **Nota:** Qwen3-TTS MLX validado pero no activo en el stack actual
 
----
-
-## Objetivo de esta fase
-
-Definir y validar la infraestructura de IA (STT, Agent, TTS, orquestación y observabilidad) antes de decidir el framework de UI final.
-
-Nota: el framework de UI está pendiente de decisión. Por ahora solo se asume una UI mínima en forma de cuadrado con tres bloques:
-- Transcripción (STT)
-- Ejecución del agente (Hermes)
-- Salida hablada (TTS)
+**Motivación del stack simplificado:**
+- Priorizar velocidad y simplicidad en desarrollo inicial
+- Voz femenina premium en inglés (af_bella)
+- Una sola dependencia TTS para facilitar desarrollo y debugging
 
 ---
 
-## Stack técnico validado
+## Stack TTS Actual (Fase Actual)
 
-### TTS (✅ COMPLETADO)
+### TTS (✅ ACTIVO - Kokoro único)
 
-**Decisión final:** Stack híbrido
+**Decisión actual:** Usar únicamente Kokoro para todo el TTS
 
 | Motor | RTF | Uso | Estado |
 |-------|-----|-----|--------|
-| Qwen3-TTS MLX 8-bit | ~0.7-1.2x | Narración progresiva, mensajes largos | ✅ Validado |
-| Kokoro-82M | ~0.1-0.3x | Respuestas cortas (< 5 palabras) | ⏳ Pendiente |
+| **Kokoro-82M** `af_bella` | **~0.21x** | Todas las respuestas | ✅ **Activo** |
+| Qwen3-TTS MLX | ~0.7-1.2x | Reservado para futuro | ⏳ Standby |
 
 **Detalles de implementación:**
-- Modelo: `mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit`
-- Plataforma: MLX nativo (Apple Silicon)
-- Memoria peak: ~6GB
-- Voz clonada: Cristina (referencia en inglés, habla español nativo)
+- Modelo: `hexgrad/Kokoro-82M`
+- Voz: `af_bella` (American Female, Grade A, HH hours training)
+- Idioma: Inglés americano
+- Plataforma: PyTorch (CPU/MPS)
+- Memoria: ~300MB
+- Speed: 1.0 (configurable)
 
-**Optimizaciones aplicadas:**
-1. Pre-computación de x_vector (embedding de voz)
-2. Transcripción manual de referencia (evita Whisper)
-3. Modelo 8-bit (balance calidad/velocidad/memoria)
+**Por qué Kokoro único (por ahora):**
+1. **Simplicidad:** Una sola dependencia TTS
+2. **Velocidad:** RTF ~0.21x ultra-rápido
+3. **Calidad:** Grade A, voz femenina natural
+4. **Facilidad:** Setup trivial, no requiere referencias de audio
+5. **Debugging:** Menor complejidad durante desarrollo inicial
 
-**Comparativa de cuantización probada:**
-- 8-bit: RTF ~0.7-1.2x, calidad excelente ✅ Seleccionado
-- 6-bit: RTF ~1.0-1.5x, calidad buena
-- 4-bit: RTF ~1.5-2.0x, calidad inferior
-
-### Runtime principal
-- Python 3.12
-- Entorno virtual por proyecto
-- Proceso backend único para orquestar STT → Agent → TTS
-
-### STT (Pendiente de integración)
-- Modelo principal: NVIDIA Parakeet (local)
-- Entrada: audio 16 kHz mono
-- Salida:
-  - tokens/parciales en streaming
-  - transcripción final por turno
-
-### Agent (Pendiente de validación)
-- Backend: Hermes Agent (streaming)
-- Funciones:
-  - recibir texto final de STT
-  - generar respuesta en tokens
-  - emitir eventos de tools (inicio, progreso, fin)
-  - devolver texto para TTS
-
-### Ritmo de inferencia y UX objetivo
-- El producto se optimiza para sensación de inmediatez.
-- Dos modos de interacción a cubrir:
-  - preguntas rápidas (respuesta inmediata)
-  - tareas agenticas largas (narración progresiva de estado)
-- SLO iniciales:
-  - VAD end → primer token de agente: <400-700 ms
-  - VAD end → primer audio TTS (TTFA): <800 ms ideal, <1.2 s máximo
-  - gap entre chunks de audio: <120 ms
-- Requisito de producto: mientras Hermes ejecuta acciones, el usuario debe recibir mensajes de progreso por UI y voz sin esperar al resultado final.
-
-### Riesgo/unknown actual de Hermes
-- Aún no hemos validado los payloads reales de streaming de Hermes en este repo.
-- Antes de cerrar la política de narración necesitamos capturar y clasificar outputs reales (tokens, eventos de tools, posibles estados intermedios).
-
-### Orquestación y comunicaciones internas
-- Bus de eventos interno en Python
-- Contrato de eventos recomendado:
-  - `stt.partial`
-  - `stt.final`
-  - `agent.token`
-  - `agent.tool.start`
-  - `agent.tool.end`
-  - `tts.start`
-  - `tts.chunk`
-  - `tts.end`
-
-### Persistencia (fase inicial)
-- Logs estructurados (JSONL)
-- Artefactos de benchmark TTS:
-  - WAV generados (no versionados)
-  - CSV/JSON de métricas
-
-### Observabilidad mínima
-- Métricas por turno:
-  - latencia STT
-  - latencia Agent (primer token y total)
-  - latencia TTS (TTFA + total)
-  - memoria pico del proceso
+**Qwen3-TTS MLX reservado para:**
+- Fases posteriores cuando se necesite español nativo
+- Narración de progreso con voz clonada (Cristina)
+- Cuando la calidad premium justifique el overhead
 
 ---
 
-## Plan por pasos
+## Plan por pasos actualizado
 
 ### Paso 0 - Base de referencia visual ✅ COMPLETADO
 - Guardar captura de la UI de referencia (Spokenly) en el repo
@@ -125,128 +64,140 @@ Nota: el framework de UI está pendiente de decisión. Por ahora solo se asume u
 - Artefacto: `docs/references/spokenly-widget-reference.png`
 
 ### Paso 1 - Benchmark TTS y selección de motor ✅ COMPLETADO
-- Evaluar múltiples motores TTS locales (11 probados)
-- Medir velocidad, RAM y calidad subjetiva
-- Seleccionar stack híbrido óptimo
+- Evaluar múltiples motores TTS locales (12 probados)
+- Seleccionar motor óptimo para fase inicial
 - **Estado:** ✅ Completado 17 Abril 2026
+- **Decisión actual:** Kokoro único para simplicidad
 
 **Motores evaluados:**
-1. Kokoro - Rápido pero sin voice cloning premium
-2. MeloTTS - Intermedio, acento no ideal
-3. Piper - Muy rápido, voces pre-entrenadas limitadas
-4. Edge TTS - Cloud, no local
-5. XTTS v2 - Lento, acento mezclado
-6. MOSS-TTS-Nano - Calidad mixta
-7. F5-TTS - Problemas de setup
-8. LuxTTS - Sesgo inglés persistente
-9. Chatterbox - Acento no español
-10. OpenVoice - Funcional pero lento
-11. CosyVoice - Lento en PyTorch
+1. Kokoro - ✅ **SELECCIONADO** (rápido, calidad A, inglés)
+2. MeloTTS - Evaluado
+3. Piper - Evaluado
+4. Edge TTS - Evaluado
+5. XTTS v2 - Evaluado
+6. MOSS-TTS-Nano - Evaluado
+7. F5-TTS - Evaluado
+8. LuxTTS - Evaluado
+9. Chatterbox - Evaluado
+10. OpenVoice - Evaluado
+11. CosyVoice - Evaluado
+12. Qwen3-TTS - ✅ Validado, standby
 
-**Decisión final:** Qwen3-TTS MLX 8-bit para voz clonada premium
+**Stack simplificado:**
+- Motor: Kokoro `af_bella`
+- RTF: ~0.21x (5× más rápido que tiempo real)
+- Idioma: Inglés americano
+- Voz: Femenina premium (Grade A)
 
-**Implementación:**
-- Scripts creados:
-  - `scripts/tts_benchmark.py` - Benchmark general
-  - `scripts/test_qwen3_mlx.py` - Test MLX
-  - `scripts/test_qwen3_mlx_4bit.py` - Comparativa cuantización
-  - `scripts/qwen3_service.py` - Servicio reutilizable
+### Paso 2 - Integración de Kokoro ✅ COMPLETADO
+- Kokoro integrado y funcionando
+- Scripts de test creados
+- Voz af_bella validada
+- **Estado:** ✅ Completado
 
-**Resultados finales:**
-- Modelo seleccionado: `mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit`
-- RTF frases largas: ~0.7x (más rápido que tiempo real) ⭐
-- RTF frases cortas: ~1.2-3x
-- Memoria: ~6GB peak
-- Calidad: Excelente, acento español correcto
-
-### Paso 2 - Integración de Kokoro (MOTOR RÁPIDO) ⏳ PENDIENTE
-- Integrar Kokoro para respuestas instantáneas
-- Target: RTF < 0.3x para < 5 palabras
-- Implementar selector automático por longitud de texto
-- **Estado:** ⏳ Pendiente - Siguiente tarea
-
-### Paso 3 - Pipeline STT -> Hermes -> TTS (CLI) ⏳ PENDIENTE
+### Paso 3 - Pipeline STT -> Kokoro TTS (CLI) ⏳ ACTUAL
 - Implementar pipeline completo en modo consola
-- Verificar streaming de eventos entre etapas
-- Validar payloads reales de Hermes
-- Salida del paso:
-  - respuesta hablada end-to-end sin UI final
+- STT (Parakeet) → Kokoro TTS
+- Output: audio hablado end-to-end
+- **Estado:** ⏳ En progreso - **SIGUIENTE TAREA**
+
+### Paso 4 - Integración con Hermes Agent ⏳ PENDIENTE
+- Añadir Hermes Agent al pipeline
+- Decisión dinámica de idioma (EN/ES)
+- Validar payloads de streaming
 - **Estado:** ⏳ Pendiente
 
-### Paso 4 - UI mínima cuadrada conectada a eventos ⏳ PENDIENTE
-- Renderizar en tiempo real:
-  - bloque STT
-  - bloque Agent
-  - bloque TTS
-- Sin decisiones estéticas finales; foco en estabilidad
+### Paso 5 - UI mínima cuadrada ⏳ PENDIENTE
+- Renderizar bloques: STT, Agent, TTS
+- Foco en estabilidad
 - **Estado:** ⏳ Pendiente
 
-### Paso 5 - Decisión de framework UI ⏳ PENDIENTE
-- Con datos de latencia y estabilidad del backend, decidir framework UI
-- Este paso se toma después de validar la infraestructura IA
-- **Estado:** ⏳ Pendiente
+### Paso 6 - Re-evaluación de stack TTS ⏳ FUTURO
+- Decidir si añadir Qwen3-TTS MLX para español
+- Evaluar necesidad de voz clonada (Cristina)
+- Decisión basada en feedback de uso
+- **Estado:** ⏳ Futuro
 
 ---
 
-## Criterios de salida de la fase actual
+## Criterios de salida de fases
 
-La Fase 1 (Infraestructura de Voz) está **COMPLETADA**:
-- ✅ Benchmark reproducible de múltiples motores TTS
-- ✅ Stack híbrido definido y validado
-- ✅ Voz de Cristina clonada con calidad premium
-- ✅ Optimizaciones de velocidad aplicadas
-- ✅ Repositorio limpio y preparado para git
+**Fase 1 (Infraestructura de Voz):** ✅ COMPLETADA
+- Benchmark de motores TTS
+- Kokoro seleccionado e integrado
+- Voz af_bella validada
 
-**Criterios de salida de Fase 2 (Pipeline Completo):**
-- Kokoro integrado y funcionando
-- Pipeline STT → Hermes → TTS end-to-end
-- Validación de streaming de Hermes
-- UI mínima con 3 estados
+**Fase 2 (Pipeline STT-TTS):** ⏳ EN PROGRESO
+- Pipeline STT → Kokoro TTS funcionando
+- CLI funcional end-to-end
+
+**Fase 3 (Integración Agent):** ⏳ PENDIENTE
+- Hermes Agent integrado
+- Decisión EN/ES implementada
+
+**Fase 4 (UI):** ⏳ PENDIENTE
+- UI mínima operativa
+- Eventos conectados
+
+**Fase 5 (Stack TTS expandido):** ⏳ FUTURO
+- Evaluar adición de Qwen3-TTS MLX
+- Decisión basada en necesidades reales
 
 ---
 
 ## Comandos útiles
 
-### Benchmark TTS
-```bash
-# Comparar motores básicos
-python scripts/tts_benchmark.py
-
-# Test Qwen3-TTS MLX
-python scripts/test_qwen3_mlx.py
-
-# Comparativa 4/6/8-bit
-python scripts/test_qwen3_mlx_4bit.py
-
-# Servicio Qwen3-TTS
-python scripts/qwen3_service.py
-```
-
-### Setup entorno MLX
+### Setup Kokoro (entorno actual)
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install mlx==0.31.1 mlx-lm==0.31.1 mlx-audio
+pip install kokoro soundfile
+```
+
+### Test Kokoro
+```bash
+# Test rápido de voz af_bella
+python scripts/test_kokoro_english.py
+```
+
+### Benchmark (referencia)
+```bash
+# Benchmark general (opcional)
+python scripts/tts_benchmark.py
+
+# Tests Qwen3-TTS MLX ( standby )
+python scripts/test_qwen3_mlx.py
 ```
 
 ---
 
 ## Notas técnicas
 
-### Por qué Qwen3-TTS MLX ganó
-1. **Calidad:** Único motor que mantiene acento español correcto con voz clonada
-2. **Velocidad:** RTF < 1.0x para frases largas (más rápido que tiempo real)
-3. **Eficiencia:** ~6GB RAM, nativo Apple Silicon
-4. **Optimizable:** Pre-computación de embeddings elimina delay inicial
+### Por qué Kokoro único (fase inicial)
 
-### Por qué stack híbrido
-- Qwen3-TTS: Calidad premium pero RTF ~3x para frases muy cortas
-- Kokoro: RTF ~0.1x ideal para "Hola", "Sí", "Entendido", "Procesando..."
-- Combinación óptima: calidad cuando importa, velocidad cuando se necesita
+**Ventajas:**
+1. **Simplicidad:** Setup trivial, una sola dependencia
+2. **Velocidad:** RTF ~0.21x, ultra-rápido
+3. **Calidad:** Grade A, voz femenina natural
+4. **Fiabilidad:** No requiere referencias de audio ni embeddings
+5. **Debugging:** Menor complejidad = bugs más fáciles de detectar
 
-### Lecciones aprendidas
-1. PyTorch MPS en Mac es más lento que CPU para TTS
-2. MLX nativo es 3-5× más rápido que PyTorch
-3. 8-bit es el sweet spot (calidad/velocidad/memoria)
-4. Pre-computar x_vector ahorra ~6 segundos por request
-5. Transcripción manual de referencia elimina delay de Whisper (~15s)
+**Limitaciones aceptadas:**
+- Solo inglés (para fase inicial)
+- No voice cloning (no necesario ahora)
+- Acento americano (adecuado para asistente AI)
+
+### Cuándo añadir Qwen3-TTS MLX
+
+**Condiciones para expandir el stack:**
+1. Necesidad real de español nativo en narración
+2. Feedback de usuarios pidiendo voz en español
+3. Requerimiento de voice cloning (Cristina)
+4. Complejidad justificada por valor añadido
+
+**Hasta entonces:** Kokoro único mantiene el stack simple y rápido.
+
+---
+
+**Mantenido por:** nicorosaless  
+**Repositorio:** https://github.com/nicorosaless/nicobot

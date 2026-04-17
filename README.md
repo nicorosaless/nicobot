@@ -2,7 +2,7 @@
 
 Un asistente de voz conversacional en tiempo real que combina speech-to-text de última generación, un agente inteligente con capacidad de ejecutar herramientas, y síntesis de voz streaming.
 
-> **Estado del proyecto:** Stack TTS finalizado. Kokoro EN (frases cortas) + Qwen3-TTS MLX ES (narración larga/voz clonada). Listo para pipeline.
+> **Estado del proyecto:** Stack TTS simplificado - usando solo Kokoro (inglés) para fase inicial. Qwen3-TTS MLX validado pero standby. Listo para pipeline STT → TTS.
 
 ---
 
@@ -11,28 +11,28 @@ Un asistente de voz conversacional en tiempo real que combina speech-to-text de 
 ### ✅ Completado
 
 #### Infraestructura de Voz (TTS)
-- **Benchmark exhaustivo** de motores TTS locales:
-  - Kokoro, Piper, MeloTTS, Edge TTS, XTTS v2, MOSS-TTS-Nano, F5-TTS, LuxTTS, Chatterbox, OpenVoice, CosyVoice, Qwen3-TTS
-  - **Ganador para voz clonada/narración:** Qwen3-TTS MLX (voz de Cristina)
-  - **Ganador para respuestas rápidas:** Kokoro `af_bella` (inglés femenino)
+- **Benchmark exhaustivo** de motores TTS locales (12 probados)
+- **Motor seleccionado:** Kokoro `af_bella` (único motor activo)
+  - Voz: Femenina americana, Grade A, calidad premium
+  - RTF: ~0.21x (5× más rápido que tiempo real)
+  - Idioma: Inglés americano
+  - Setup trivial, ultra-rápido, calidad excelente
   
-- **Voz de Cristina clonada** con calidad premium:
-  - Modelo: `mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit`
-  - RTF: ~0.7-1.2x (más rápido que tiempo real para frases >10 palabras)
-  - Memoria: ~6GB peak
-  - Calidad: Excelente, sin acento americano
+- **Motores evaluados y standby:**
+  - Qwen3-TTS MLX: Validado para español + voice cloning (reservado)
+  - Piper, MeloTTS, XTTS, etc.: Evaluados pero no seleccionados
 
-- **Optimizaciones implementadas:**
-  - Pre-computación de embedding de voz (x_vector)
-  - Transcripción manual de referencia (evita delay de Whisper)
-  - Comparativa 8-bit vs 6-bit vs 4-bit completada
+- **Stack simplificado (fase inicial):**
+  - Una sola dependencia TTS: Kokoro
+  - Simplicidad máxima para desarrollo rápido
+  - Qwen3-TTS MLX standby para expansión futura
 
 ### 🔄 En Progreso
 
-- **Stack híbrido de TTS validado:**
-  - **Kokoro (English)**: voz `af_bella` para respuestas instantáneas en inglés (< 5 palabras)
-  - **Qwen3-TTS MLX (Spanish)**: voz de Cristina clonada para narración de progreso en español
-  - Estrategia: output del agente en inglés para cortos, narración en español para largos
+- **Pipeline STT → Kokoro TTS:**
+  - Integración de Parakeet (STT) con Kokoro (TTS)
+  - Pipeline CLI end-to-end
+  - Output en audio hablado
 
 ### ⏳ Pendiente
 
@@ -65,18 +65,21 @@ Para este producto, la latencia no es un detalle técnico: define la experiencia
 | Fin de habla (VAD) → primer audio TTS (TTFA) | **<800 ms ideal, <1.2 s máximo** |
 | Gaps entre chunks de audio durante streaming | **<120 ms** |
 
-### Stack de TTS Seleccionado (✅ Validado)
+### Stack de TTS (✅ ACTIVO - Simplificado)
 
-| Escenario | Motor | Idioma | RTF | Latencia | Voz |
-|-----------|-------|--------|-----|----------|-----|
-| Respuestas cortas (< 5 palabras) | **Kokoro** | 🇬🇧 Inglés | **~0.21x** | ~200-400ms | `af_bella` (femenina, Grade A) |
-| Narración de progreso | **Qwen3-TTS MLX** | 🇪🇸 Español | ~0.7-1.2x | ~2-4s | Cristina (clonada) |
-| Mensajes largos (> 15 palabras) | **Qwen3-TTS MLX** | 🇪🇸 Español | ~0.7x | tiempo real | Cristina (clonada) |
+| Motor | Idioma | Voz | RTF | Latencia | Uso |
+|-------|--------|-----|-----|----------|-----|
+| **Kokoro** | 🇬🇧 Inglés | `af_bella` (femenina, Grade A) | **~0.21x** | ~200-400ms | **Todas las respuestas** |
 
-**Estrategia:**
-- Frases cortas y saludos: Kokoro en inglés (ultra-rápido, voz femenina premium)
-- Narración de progreso y mensajes largos: Qwen3-TTS MLX en español (voz clonada premium)
-- El agente genera output en inglés para respuestas rápidas, español para explicaciones largas
+**Stack simplificado (fase inicial):**
+- **Un único motor TTS:** Kokoro `af_bella`
+- **Ventajas:** Simplicidad, velocidad, calidad premium, setup trivial
+- **Limitación aceptada:** Solo inglés (para fase inicial de desarrollo)
+
+**Motor standby (para expansión futura):**
+- **Qwen3-TTS MLX:** Validado para español + voice cloning (Cristina)
+- **Cuándo añadirlo:** Cuando se requiera español nativo o voz clonada
+- **Trigger:** Feedback de usuarios o requerimientos de negocio
 
 ### Implicaciones para flujo agentico
 
@@ -205,15 +208,23 @@ pip install soundfile librosa transformers
 
 ### Fase 1: Infraestructura de Voz ✅
 - [x] Benchmark exhaustivo de motores TTS (12 motores probados)
-- [x] Selección de stack híbrido: Kokoro (EN corto) + Qwen3-TTS MLX (ES largo)
-- [x] Clonado de voz de Cristina con calidad premium
-- [x] Optimización de velocidad (RTF < 1.0x para frases largas)
+- [x] Selección de motor único: Kokoro `af_bella` (inglés)
+- [x] Stack simplificado: una sola dependencia TTS
+- [x] Validación de velocidad y calidad
 - [x] Limpieza de repositorio y preparación para git
-- [x] Voz femenina premium seleccionada: Kokoro `af_bella` (inglés)
 
-### Fase 2: Pipeline Completo (Actual)
-- [ ] Integración de Kokoro para respuestas rápidas en inglés
-- [ ] Pipeline STT → Hermes → TTS end-to-end
+### Fase 2: Pipeline STT → TTS (Actual)
+- [ ] Integración de Parakeet (STT) con Kokoro (TTS)
+- [ ] Pipeline CLI end-to-end funcionando
+- [ ] Tests de integración
+
+### Fase 3: Integración Hermes Agent ⏳
+- [ ] Añadir Hermes Agent al pipeline
+- [ ] Validar payloads de streaming
+
+### Fase 4: Expansión de Stack TTS (Futuro) ⏳
+- [ ] Evaluar adición de Qwen3-TTS MLX (español)
+- [ ] Decisión basada en feedback y necesidades
 - [ ] Validación de streaming de Hermes Agent
 - [ ] UI mínima cuadrada con 3 estados
 
@@ -230,24 +241,28 @@ pip install soundfile librosa transformers
 
 ## Hallazgos Técnicos Clave
 
-### Selección de TTS
-Tras probar 12 motores diferentes, el stack óptimo para Mac es:
+### Selección de TTS - Fase Simplificada
 
-1. **Qwen3-TTS MLX** para narración premium en español:
-   - Único motor que clona voz de referencia manteniendo acento español correcto
-   - RTF ~0.7-1.2x (tiempo real en frases largas)
-   - Memoria manejable (~6GB)
-   - Voz: Cristina (clonada de referencia)
+**Stack actual (Kokoro único):**
 
-2. **Kokoro** para respuestas ultra-rápidas en inglés:
-   - Voz: `af_bella` (femenina, American English, Grade A)
-   - RTF ~0.21x (5× más rápido que tiempo real)
-   - Ideal para "Hello", "Yes", "Got it", "Processing..."
-   - Calidad premium con horas de entrenamiento HH
+Tras probar 12 motores, seleccionamos **Kokoro único** para fase inicial:
 
-**Estrategia de idioma:**
-- Corto en inglés (rápido): Kokoro af_bella
-- Largo en español (premium): Qwen3-TTS MLX Cristina
+**Ventajas del stack simplificado:**
+1. **Simplicidad:** Una sola dependencia TTS
+2. **Velocidad:** RTF ~0.21x, ultra-rápido
+3. **Calidad:** Grade A, voz femenina natural en inglés
+4. **Setup trivial:** `pip install kokoro`
+5. **Debugging:** Menor complejidad = desarrollo más rápido
+
+**Motor seleccionado:**
+- **Kokoro** `af_bella`: American Female, Grade A, calidad premium
+- RTF ~0.21x (5× más rápido que tiempo real)
+- Idioma: Inglés americano
+
+**Expansión futura (cuándo añadir más motores):**
+- **Qwen3-TTS MLX:** Reservado para cuando se necesite español nativo
+- Condición de activación: Feedback de usuarios o requerimiento de español
+- Ventaja de esperar: Stack simple = desarrollo más ágil
 
 ### Optimizaciones Aplicadas
 - **Pre-computar x_vector:** Ahorra ~6 segundos por request
@@ -273,4 +288,4 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 ---
 
 **Última actualización:** 17 Abril 2026  
-**Estado:** Fase 1 completada - Stack TTS validado (Kokoro EN + Qwen3-TTS MLX ES), listo para pipeline end-to-end
+**Estado:** Fase 1 completada - Stack simplificado (Kokoro único). Fase 2 en progreso: Pipeline STT → TTS.
