@@ -2,7 +2,7 @@
 
 Un asistente de voz conversacional en tiempo real que combina speech-to-text de última generación, un agente inteligente con capacidad de ejecutar herramientas, y síntesis de voz streaming.
 
-> **Estado del proyecto:** Fase de selección de TTS completada. Stack de voz clonada (Qwen3-TTS MLX) validado y listo. Próximo paso: integración de Kokoro para respuestas ultra-rápidas.
+> **Estado del proyecto:** Fase de selección de TTS completada. Stack validado: Qwen3-TTS MLX (voz clonada) + Piper (español peninsular rápido).
 
 ---
 
@@ -12,8 +12,9 @@ Un asistente de voz conversacional en tiempo real que combina speech-to-text de 
 
 #### Infraestructura de Voz (TTS)
 - **Benchmark exhaustivo** de motores TTS locales:
-  - Kokoro, MeloTTS, Piper, Edge TTS, XTTS v2, MOSS-TTS-Nano, F5-TTS, LuxTTS, Chatterbox, OpenVoice, CosyVoice
-  - **Ganador para voz clonada:** Qwen3-TTS en MLX (Apple Silicon)
+  - Piper, MeloTTS, Kokoro, Edge TTS, XTTS v2, MOSS-TTS-Nano, F5-TTS, LuxTTS, Chatterbox, OpenVoice, CosyVoice, Qwen3-TTS
+  - **Ganador para voz clonada:** Qwen3-TTS MLX (voz de Cristina)
+  - **Ganador para respuestas rápidas:** Piper (español peninsular)
   
 - **Voz de Cristina clonada** con calidad premium:
   - Modelo: `mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit`
@@ -29,8 +30,9 @@ Un asistente de voz conversacional en tiempo real que combina speech-to-text de 
 ### 🔄 En Progreso
 
 - **Stack híbrido de TTS validado:**
-  - Qwen3-TTS MLX: para narración de progreso y mensajes largos
-  - Kokoro: para respuestas instantáneas (< 5 palabras)
+  - Qwen3-TTS MLX: voz de Cristina clonada para narración de progreso y mensajes largos
+  - Piper: voz `es_ES-mls_9972-low` (femenina española) para respuestas instantáneas (< 5 palabras)
+  - ❌ Kokoro descartado: solo tiene español latinoamericano, no peninsular
 
 ### ⏳ Pendiente
 
@@ -65,13 +67,16 @@ Para este producto, la latencia no es un detalle técnico: define la experiencia
 
 ### Stack de TTS Seleccionado (✅ Validado)
 
-| Escenario | Motor | RTF | Latencia | Voz |
-|-----------|-------|-----|----------|-----|
-| Respuestas cortas (< 5 palabras) | **Kokoro** `ef_dora` | **~0.2x** | ~200-400ms | Femenina español |
-| Narración de progreso | **Qwen3-TTS MLX** | ~0.7-1.2x | ~2-4s | Cristina (clonada) |
-| Mensajes largos (> 15 palabras) | **Qwen3-TTS MLX** | ~0.7x | tiempo real | Cristina (clonada) |
+| Escenario | Motor | RTF | Latencia | Voz | Acento |
+|-----------|-------|-----|----------|-----|--------|
+| Respuestas cortas (< 5 palabras) | **Piper** `es_ES-mls_9972-low` | **~0.14x** | ~150-300ms | Femenina | 🇪🇸 España (peninsular) |
+| Narración de progreso | **Qwen3-TTS MLX** | ~0.7-1.2x | ~2-4s | Cristina (clonada) | 🇪🇸 España (clonado) |
+| Mensajes largos (> 15 palabras) | **Qwen3-TTS MLX** | ~0.7x | tiempo real | Cristina (clonada) | 🇪🇸 España (clonado) |
 
-**Nota:** Kokoro usa voces pre-entrenadas (no clonables). Qwen3-TTS usa voz de Cristina clonada con calidad premium.
+**Notas:**
+- **Piper**: Voces pre-entrenadas, ultra-rápidas, acento español peninsular (es_ES)
+- **Qwen3-TTS MLX**: Voice cloning premium, voz de Cristina clonada de referencia
+- **❌ Kokoro descartado**: Solo tiene español latinoamericano (latino), no peninsular
 
 ### Implicaciones para flujo agentico
 
@@ -200,13 +205,14 @@ pip install soundfile librosa transformers
 
 ### Fase 1: Infraestructura de Voz ✅
 - [x] Benchmark exhaustivo de motores TTS
-- [x] Selección de stack híbrido (Qwen3-TTS MLX + Kokoro)
+- [x] Selección de stack híbrido (Qwen3-TTS MLX + Piper)
 - [x] Clonado de voz de Cristina con calidad premium
 - [x] Optimización de velocidad (RTF < 1.0x para frases largas)
 - [x] Limpieza de repositorio y preparación para git
+- [x] Selección de motor rápido con acento español peninsular (Piper)
 
 ### Fase 2: Pipeline Completo (Actual)
-- [ ] Integración de Kokoro para respuestas rápidas
+- [ ] Integración de Piper para respuestas rápidas (< 5 palabras)
 - [ ] Pipeline STT → Hermes → TTS end-to-end
 - [ ] Validación de streaming de Hermes Agent
 - [ ] UI mínima cuadrada con 3 estados
@@ -225,16 +231,18 @@ pip install soundfile librosa transformers
 ## Hallazgos Técnicos Clave
 
 ### Selección de TTS
-Tras probar 11 motores diferentes, el stack óptimo para Mac es:
+Tras probar 12 motores diferentes, el stack óptimo para Mac es:
 
 1. **Qwen3-TTS MLX** para calidad premium:
    - Único motor que clona voz de referencia manteniendo acento español correcto
    - RTF ~0.7-1.2x (más rápido que tiempo real en frases largas)
    - Memoria manejable (~6GB)
 
-2. **Kokoro** para velocidad (próximo):
-   - RTF ~0.1-0.3x (10× más rápido)
-   - Ideal para "Hola", "Entendido", "Procesando..."
+2. **Piper** para velocidad con acento español peninsular:
+   - Voz: `es_ES-mls_9972-low` (femenina, español de España)
+   - RTF ~0.14x (7× más rápido que tiempo real)
+   - Ideal para "Hola", "Sí", "Entendido", "Procesando..."
+   - ❌ Kokoro descartado: solo tiene español latinoamericano
 
 ### Optimizaciones Aplicadas
 - **Pre-computar x_vector:** Ahorra ~6 segundos por request
@@ -260,4 +268,4 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 ---
 
 **Última actualización:** 17 Abril 2026  
-**Estado:** Fase 1 completada - Listo para integración de Kokoro y pipeline end-to-end
+**Estado:** Fase 1 completada - Stack TTS validado (Qwen3-TTS MLX + Piper), listo para pipeline end-to-end
