@@ -9,11 +9,12 @@ Este script implementa un asistente de voz similar a Spokenly:
 4. Genera TTS con Kokoro (af_bella)
 5. Reproduce el audio
 
-Requirements:
-    pip install kokoro soundfile nemo_toolkit['asr'] transformers torch sounddevice numpy
-
-Usage:
+Setup:
+    source artifacts/kokoro-venv/bin/activate
     python spoken_assistant.py
+
+O manualmente:
+    pip install kokoro soundfile nemo_toolkit['asr'] transformers torch sounddevice numpy
 """
 
 import sys
@@ -24,6 +25,53 @@ import tempfile
 import os
 from pathlib import Path
 from typing import Optional
+
+
+# Verificar que estamos en el venv correcto
+def check_venv():
+    """Verifica que las dependencias estén instaladas"""
+    missing = []
+
+    try:
+        import numpy as np
+    except ImportError:
+        missing.append("numpy")
+
+    try:
+        import sounddevice as sd
+    except ImportError:
+        missing.append("sounddevice")
+
+    try:
+        import soundfile as sf
+    except ImportError:
+        missing.append("soundfile")
+
+    try:
+        import torch
+    except ImportError:
+        missing.append("torch")
+
+    try:
+        import transformers
+    except ImportError:
+        missing.append("transformers")
+
+    try:
+        from kokoro import KPipeline
+    except ImportError:
+        missing.append("kokoro")
+
+    if missing:
+        print("❌ Faltan dependencias. Ejecuta:")
+        print(f"   source artifacts/kokoro-venv/bin/activate")
+        print(f"   pip install {' '.join(missing)}")
+        print("\n⚠️  Para NeMo (Parakeet), necesitarás:")
+        print("   pip install nemo_toolkit['asr']")
+        sys.exit(1)
+
+
+check_venv()
 
 import numpy as np
 import sounddevice as sd
