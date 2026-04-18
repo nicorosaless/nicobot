@@ -15,7 +15,9 @@ import sys
 import time
 import tempfile
 import os
-import threading
+import termios
+import tty
+import select
 from pathlib import Path
 from typing import Optional, List
 
@@ -31,7 +33,6 @@ def check_deps():
         "torch",
         "transformers",
         "kokoro",
-        "pynput",
     ]:
         try:
             __import__(pkg)
@@ -59,7 +60,6 @@ import torch
 from transformers import MarianMTModel, MarianTokenizer
 from kokoro import KPipeline
 import nemo.collections.asr as nemo_asr
-from pynput import keyboard
 
 
 class PushToTalkRecorder:
@@ -138,9 +138,9 @@ class SpokenAssistantPTT:
         print("🔄 Inicializando...")
 
         # Parakeet v3
-        print("   📥 Cargando Parakeet v3 (~2GB primera vez)...")
+        print("   📥 Cargando Parakeet v3 0.6B (mas rapido)...")
         self.asr_model = nemo_asr.models.EncDecRNNTBPEModel.from_pretrained(
-            model_name="nvidia/parakeet-tdt-1.1b"
+            model_name="nvidia/parakeet-tdt-0.6b-v3"
         )
         self.asr_model.eval()
         self.asr_model.to(self.device)
@@ -228,33 +228,41 @@ class SpokenAssistantPTT:
         finally:
             self.is_processing = False
 
-    def on_key_press(self, key):
-        """Callback cuando se pulsa una tecla"""
-        try:
-            if (
-                key == keyboard.Key.f7
-                and not self.recorder.is_recording
-                and not self.is_processing
-            ):
-                print("🔴 GRABANDO... (suelta F7 para procesar)", end="\r")
-                self.recorder.start_recording()
-        except:
-            pass
+    def toggle_recording(self):
+        """Alterna grabacion con cada pulsacion de F7"""
+        if self.is_processing:
+            return
 
-    def on_key_release(self, key):
-        """Callback cuando se suelta una tecla"""
-        try:
-            if key == keyboard.Key.f7 and self.recorder.is_recording:
-                print("⏹️  Procesando...                              ")
-                audio = self.recorder.stop_recording()
-                if audio is not None:
-                    duration = len(audio) / 16000
-                    print(f"   Audio: {duration:.1f}s")
-                    self.process_audio(audio)
-                else:
-                    print("⚠️  Audio muy corto, ignorado")
-        except:
-            pass
+        if not self.recorder.is_recording:
+            self.recorder.start_recording()
+            print("🔴 GRABANDO... (pulsa F7 otra vez para parar)")
+            return
+
+        print("⏹️  Procesando...")
+        audio = self.recorder.stop_recording()
+        if audio is not None:
+            duration = len(audio) / 16000
+            print(f"   Audio: {duration:.1f}s")
+            self.process_audio(audio)
+        else:
+            print("⚠️  Audio muy corto, ignorado")
+
+    def _read_key_sequence(self):
+        """Lee secuencias de teclas en modo raw del terminal."""
+        if not select.select([sys.stdin], [], [], 0.05)[0]:
+            return None
+
+        ch = sys.stdin.read(1)
+        if not ch:
+            return None
+
+        if ch != "\x1b":
+            return ch
+
+        seq = ch
+        while select.select([sys.stdin], [], [], 0.002)[0]:
+            seq += sys.stdin.read(1)
+        return seq
 
     def run(self):
         """Loop principal con hotkey listener"""
@@ -262,9 +270,9 @@ class SpokenAssistantPTT:
         print("🎙️  SPOKEN ASSISTANT - Push to Talk (F7)")
         print("=" * 60)
         print("\nInstrucciones:")
-        print("   🔴 Mantén F7 pulsado para GRABAR")
-        print("   ⏹️  Suelta F7 para PROCESAR y hablar")
-        print("   ❌ ESC para salir")
+        print("   🔴 Pulsa F7 para EMPEZAR a grabar")
+        print("   ⏹️  Pulsa F7 otra vez para PARAR y procesar")
+        print("   ❌ Pulsa q para salir")
         print("\n🔄 Inicializando modelos (puede tardar la primera vez)...")
 
         self.setup()
@@ -272,14 +280,28 @@ class SpokenAssistantPTT:
         print("✅ Listo! Pulsa F7 para empezar...")
         print("=" * 60)
 
-        # Configurar listener de teclado
-        with keyboard.Listener(
-            on_press=self.on_key_press, on_release=self.on_key_release
-        ) as listener:
-            try:
-                listener.join()
-            except KeyboardInterrupt:
-                pass
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            while True:
+                seq = self._read_key_sequence()
+                if seq is None:
+                    continue
+
+                if seq == "q":
+                    break
+
+                # F7 en terminal ANSI: ESC [ 18 ~
+                if seq == "\x1b[18~":
+                    self.toggle_recording()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+        if self.recorder.is_recording:
+            self.recorder.stop_recording()
 
         print("\n👋 Hasta luego!")
 
