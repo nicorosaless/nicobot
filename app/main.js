@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, globalShortcut } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 
@@ -11,6 +11,8 @@ const state = {
   translatedEn: "",
   lastTimings: null,
   recordingStartedAt: null,
+  hotkey: "F7",
+  hotkeyRegistered: false,
   events: [],
 };
 
@@ -155,6 +157,26 @@ function startBackend() {
   });
 }
 
+function registerToggleHotkey(accelerator) {
+  try {
+    globalShortcut.unregisterAll();
+    const ok = globalShortcut.register(accelerator, () => {
+      sendToggleKey();
+      pushEvent("system", `Hotkey pressed: ${accelerator}`);
+    });
+    state.hotkey = accelerator;
+    state.hotkeyRegistered = ok;
+    if (!ok) pushEvent("stderr", `Could not register hotkey: ${accelerator}`);
+    emitState();
+    return ok;
+  } catch (err) {
+    pushEvent("stderr", `Hotkey error: ${String(err)}`);
+    state.hotkeyRegistered = false;
+    emitState();
+    return false;
+  }
+}
+
 function stopBackend() {
   if (!backendProcess) return;
   backendProcess.kill("SIGTERM");
@@ -170,6 +192,7 @@ function sendToggleKey() {
 app.whenReady().then(() => {
   createWindow();
   startBackend();
+  registerToggleHotkey("F7");
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -177,6 +200,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  globalShortcut.unregisterAll();
   stopBackend();
   if (process.platform !== "darwin") app.quit();
 });
@@ -190,4 +214,8 @@ ipcMain.handle("backend:restart", () => {
   stopBackend();
   startBackend();
   return true;
+});
+ipcMain.handle("hotkey:set", (_event, accelerator) => {
+  const ok = registerToggleHotkey(accelerator);
+  return { ok, accelerator };
 });

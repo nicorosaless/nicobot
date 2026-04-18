@@ -12,70 +12,70 @@
 
     <main class="app-shell">
       <header class="topbar">
-        <div>
-          <h1>NicoBot</h1>
-          <p class="subtitle">Electron desktop shell · backend local</p>
+        <div class="brand-left">
+          <div class="app-icon">L</div>
+          <div>
+            <h1>Warp</h1>
+            <p class="subtitle">NicoBot voice companion</p>
+          </div>
         </div>
-        <div class="actions">
-          <button id="restartBtn" class="btn ghost">Restart Backend</button>
-        </div>
+        <div class="brand-right">Spokenly</div>
       </header>
 
-      <section class="status-row">
-        <div class="state-card">
-          <span class="label">Assistant State</span>
+      <section class="widget panel" id="floatingWidget">
+        <div class="widget-head">
           <span id="statePill" class="pill idle">idle</span>
+          <div class="hotkey-wrap">
+            <label for="hotkeySelect">Hotkey</label>
+            <select id="hotkeySelect">
+              <option value="F7">F7</option>
+              <option value="F8">F8</option>
+              <option value="CommandOrControl+Shift+Space">Ctrl/Cmd+Shift+Space</option>
+            </select>
+            <button id="setHotkeyBtn" class="btn ghost small">Apply</button>
+          </div>
         </div>
-        <div class="state-card">
-          <span class="label">Push to Talk</span>
-          <button id="recordBtn" class="btn primary">Start / Stop</button>
-          <small>Mapped to backend toggle key</small>
+
+        <button id="recordBtn" class="toggle-btn" title="Toggle recording">
+          <span id="toggleLabel">Toggle recording</span>
+        </button>
+
+        <div class="dots" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
         </div>
       </section>
 
-      <section class="grid">
+      <section class="grid collapsed" id="conversationPanel">
         <article class="panel panel-main">
-          <h2>What To Show After Transcription</h2>
-          <p class="hint">
-            Proposed UX: keep both original and transformed text visible to build trust.
-          </p>
-
+          <h2>Transcription Display</h2>
           <div class="text-block">
             <h3>Your speech (Spanish)</h3>
             <p id="transcriptEs" class="text-output empty">No transcript yet.</p>
           </div>
-
           <div class="text-block">
             <h3>Assistant speech text (English)</h3>
             <p id="translatedEn" class="text-output empty">No translated text yet.</p>
           </div>
-
-          <div class="ideas">
-            <h3>Display ideas once transcription is done</h3>
-            <ul>
-              <li>Confidence badge: high / medium / low for STT trust.</li>
-              <li>Editable transcript chip before speaking (quick correction).</li>
-              <li>Diff/highlight on translated phrase when changed by user.</li>
-              <li>One-tap replay and copy for last spoken output.</li>
-            </ul>
-          </div>
         </article>
 
         <aside class="panel panel-side">
+          <div class="side-actions">
+            <button id="restartBtn" class="btn ghost">Restart Backend</button>
+          </div>
           <h2>Turn Metrics</h2>
-          <div class="metric">
-            <span>STT</span>
-            <strong id="metricStt">-</strong>
-          </div>
-          <div class="metric">
-            <span>TTS</span>
-            <strong id="metricTts">-</strong>
-          </div>
+          <div class="metric"><span>STT</span><strong id="metricStt">-</strong></div>
+          <div class="metric"><span>TTS</span><strong id="metricTts">-</strong></div>
 
           <h2 class="log-title">Recent Events</h2>
           <div id="events" class="events"></div>
         </aside>
       </section>
+
+      <button id="expandBtn" class="expand-btn" title="Expand/collapse conversation">
+        Show conversation
+      </button>
     </main>
 
     <script src="./renderer.js"></script>

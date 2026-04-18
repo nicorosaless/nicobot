@@ -329,38 +329,54 @@ class SpokenAssistantPTT:
         print("✅ Listo! Pulsa F7 para empezar...")
         print("=" * 60)
 
-        fd = sys.stdin.fileno()
-        old = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
-            while True:
-                seq = self._read_key_sequence()
-                if seq is None:
-                    continue
+        # Mode A: interactive terminal (manual keys)
+        if sys.stdin.isatty():
+            fd = sys.stdin.fileno()
+            old = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                while True:
+                    seq = self._read_key_sequence()
+                    if seq is None:
+                        continue
 
-                if seq == "q":
-                    break
+                    if seq == "q":
+                        break
 
-                if seq == "r":
-                    self.toggle_recording()
-                    continue
+                    if seq == "r":
+                        self.toggle_recording()
+                        continue
 
-                if seq == " ":
-                    self.toggle_recording()
-                    continue
+                    if seq == " ":
+                        self.toggle_recording()
+                        continue
 
-                # F7 en terminal ANSI: ESC [ 18 ~
-                if seq == "\x1b[18~" or (seq.startswith("\x1b[18") and seq.endswith("~")):
-                    self.toggle_recording()
-                    continue
+                    # F7 en terminal ANSI: ESC [ 18 ~
+                    if seq == "\x1b[18~" or (seq.startswith("\x1b[18") and seq.endswith("~")):
+                        self.toggle_recording()
+                        continue
 
-                if seq.startswith("\x1b") and seq != "\x1b":
-                    print(f"\n🔎 Tecla no mapeada detectada: {seq!r}")
+                    if seq.startswith("\x1b") and seq != "\x1b":
+                        print(f"\n🔎 Tecla no mapeada detectada: {seq!r}")
 
-        except KeyboardInterrupt:
-            pass
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        else:
+            # Mode B: embedded child process (Electron) - read commands from stdin pipe
+            print("🔌 Embedded mode: waiting for commands on stdin (r=toggle, q=quit)")
+            try:
+                while True:
+                    cmd = sys.stdin.read(1)
+                    if not cmd:
+                        break
+                    if cmd == "q":
+                        break
+                    if cmd in ("r", " "):
+                        self.toggle_recording()
+            except KeyboardInterrupt:
+                pass
 
         if self.recorder.is_recording:
             self.recorder.stop_recording()
