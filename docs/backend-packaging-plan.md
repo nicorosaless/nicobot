@@ -1,76 +1,64 @@
-# Backend & Packaging Plan
+# Backend and Packaging Plan (Electron-first)
 
-## Current backend status
+## Goal
 
-- Main runtime entrypoint: `spoken_assistant_ptt.py`
-- Input flow: push-to-talk (`F7`, fallback `r`/space)
-- Pipeline: `Parakeet (STT)` -> `ES->EN translation` -> `Kokoro (af_bella)`
-- Metrics printed after each run:
-  - STT time
-  - TTS generation time
+Ship a downloadable macOS app quickly with:
+- Electron frontend
+- Local Python backend service
+- Embedded STT/TTS pipeline
 
-## Backend cleanup completed
+## Backend scope (frozen for frontend handoff)
 
-- Kept only the runtime-oriented backend file:
-  - `spoken_assistant_ptt.py`
-- Legacy/experimental files removed from root:
-  - `parakeet_coreml.py`
-  - `spoken_assistant_whisper.py`
-  - `spoken_assistant_parakeet.py`
-- Cleaned heavy local artifacts and caches from repo tracking.
+- Runtime entrypoint: `spoken_assistant_ptt.py`
+- Pipeline: `Parakeet v3` -> `ES->EN` -> `Kokoro`
+- Input: push-to-talk toggle (`F7`, fallback `r`/`space`)
+- Metrics: `stt_seconds`, `tts_seconds`
 
-## Backend hardening checklist (next)
+## Minimal backend service contract for Electron
 
-1. Split `spoken_assistant_ptt.py` into modules:
-   - `backend/audio_io.py`
-   - `backend/stt.py`
-   - `backend/translate.py`
-   - `backend/tts.py`
-   - `backend/app.py`
-2. Add structured logs (`json`) and error codes.
-3. Add a simple local API layer for frontend integration:
-   - `/health`
-   - `/start_recording`
-   - `/stop_and_process`
-4. Add smoke tests for non-audio logic.
+Implement a thin local API wrapper around existing logic:
 
-## Packaging strategy (macOS)
+- `GET /health`
+  - returns readiness + model preload state
+- `POST /record/start`
+  - starts recording session
+- `POST /record/stop`
+  - stops recording and returns transcription/translation/tts status
+- `GET /metrics/last`
+  - returns timings of last processed turn
 
-### Recommended path
+## Packaging strategy
 
-- Package backend as a local service binary using `pyinstaller`.
-- Keep frontend as separate app shell (Tauri/Electron/SwiftUI), talking to localhost.
+### Recommended
 
-### Why this split
+- Keep Python backend as packaged local service.
+- Electron starts backend child process on app boot.
+- UI interacts with backend via localhost API.
 
-- Faster iteration on frontend without rebuilding STT/TTS internals each time.
-- Clear failure boundaries and easier diagnostics.
-- Easier future migration to native frontend.
+### Why
 
-## Packaging milestones
+- Fastest implementation path.
+- Clear separation of concerns.
+- No premature Rust rewrite.
 
-1. **Backend binary**
-   - Add `pyinstaller` spec for `spoken_assistant_ptt.py`
-   - Produce reproducible build in CI.
-2. **App shell**
-   - Launch backend on app startup.
-   - Poll `/health` until ready.
-3. **Installer/distribution**
-   - Create signed `.app` + `.dmg`.
-   - Add first-run permissions guidance (microphone/accessibility if needed).
+## Build outputs
 
-## Frontend handoff contract
+1. **Backend bundle**
+   - packaged Python runtime + dependencies
+2. **Electron app**
+   - macOS `.app`
+3. **Installer**
+   - signed `.dmg`
 
-The frontend can start with these assumptions:
+## Signing/notarization checklist
 
-- Backend exposes deterministic states:
-  - `idle`
-  - `recording`
-  - `processing`
-  - `speaking`
-- Backend returns timing metrics per turn:
-  - `stt_seconds`
-  - `tts_seconds`
-  - `total_seconds`
+- Developer ID cert configured
+- Hardened runtime enabled
+- Notarization + staple workflow
+- Verify install on clean machine
 
-This allows immediate UI work while backend continues to harden.
+## Rust migration note
+
+Rust backend remains optional and deferred.
+
+Only migrate when profiling proves Python orchestration is a real bottleneck or packaging footprint requires it.
