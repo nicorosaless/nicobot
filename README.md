@@ -2,7 +2,7 @@
 
 Un asistente de voz conversacional en tiempo real que combina speech-to-text de última generación, un agente inteligente con capacidad de ejecutar herramientas, y síntesis de voz streaming.
 
-> **Estado del proyecto:** Pipeline STT → TTS implementado y funcionando. `spoken_assistant.py` escucha, transcribe (Parakeet v3 ES), traduce (ES→EN), y responde con voz (Kokoro af_bella).
+> **Estado del proyecto:** Push-to-talk implementado! `spoken_assistant_ptt.py` con F7 para grabar, soltar para procesar. STT (Parakeet v3) → Translate → TTS (Kokoro).
 
 ---
 
@@ -30,10 +30,11 @@ Un asistente de voz conversacional en tiempo real que combina speech-to-text de 
 ### 🔄 En Progreso
 
 - **Pipeline STT → Translate → TTS:** ✅ Implementado
-  - `spoken_assistant.py`: Pipeline completo funcionando
-  - Parakeet v3 (STT español) → Traductor → Kokoro (TTS inglés)
-  - VAD (Voice Activity Detection) para detección de voz
-  - Audio grabado → transcrito → traducido → hablado
+  - **`spoken_assistant_ptt.py`**: Versión push-to-talk con F7 (RECOMMENDED)
+    - Mantén F7 pulsado para grabar
+    - Suelta F7 para procesar (STT → Translate → TTS → Play)
+    - Control total del usuario sobre cuándo grabar
+  - `spoken_assistant.py`: Versión con VAD automático (legacy)
 
 ### ⏳ Pendiente
 
@@ -150,28 +151,27 @@ El cerebro del sistema. HERMES es un agente conversacional que:
 
 ```
 nicobot/
-├── README.md                 # Este archivo
-├── .gitignore               # Exclusiones de git
-├── spoken_assistant.py      # 🎙️ Pipeline STT → TTS (main)
-├── setup.sh                 # Script de instalación
+├── README.md                      # Este archivo
+├── .gitignore                     # Exclusiones de git
+├── spoken_assistant_ptt.py        # 🎙️ RECOMMENDED: Push-to-talk con F7
+├── spoken_assistant.py            # Legacy: VAD automático
+├── setup.sh                        # Script de instalación
 ├── docs/
-│   ├── references/          # Referencias visuales (UI)
-│   └── roadmap/             # Documentación de roadmap
-├── exemple/                 # Archivos de referencia
-│   └── voice_preview_cristina.mp3  # Voz de referencia
-├── scripts/                 # Scripts de utilidad
-│   ├── tts_benchmark.py     # Benchmark comparativo
-│   ├── qwen3_service.py     # Servicio Qwen3-TTS
-│   ├── test_qwen3_mlx.py    # Tests MLX
-│   ├── test_qwen3_mlx_4bit.py # Comparativa 4/6/8-bit
-│   └── test_kokoro_english.py # Test voz Kokoro EN
-└── artifacts/               # Artefactos generados (no en git)
-    └── kokoro-en-test/      # Archivos de audio generados
+│   ├── references/                 # Referencias visuales (UI)
+│   └── roadmap/                    # Documentación de roadmap
+├── exemple/                        # Archivos de referencia
+│   └── voice_preview_cristina.mp3 # Voz de referencia
+├── scripts/                        # Scripts de utilidad
+│   ├── tts_benchmark.py            # Benchmark comparativo
+│   ├── test_kokoro_english.py      # Test voz Kokoro EN
+│   └── ...                         # Otros tests
+└── artifacts/                      # Artefactos generados (no en git)
+    └── kokoro-en-test/             # Archivos de audio
 ```
 
-## 🎙️ Spoken Assistant - Pipeline STT → TTS
+## 🎙️ Spoken Assistant - Push to Talk (F7) ⭐ RECOMMENDED
 
-El script principal `spoken_assistant.py` implementa un asistente de voz completo:
+La versión **`spoken_assistant_ptt.py`** es la versión recomendada con push-to-talk:
 
 ### Flujo
 1. **Escucha** audio del micrófono con VAD (Voice Activity Detection)
@@ -180,40 +180,60 @@ El script principal `spoken_assistant.py` implementa un asistente de voz complet
 4. **TTS** usando Kokoro voz `af_bella` (síntesis voz femenina en inglés)
 5. **Reproducción** del audio generado
 
-### Uso rápido
+### Uso rápido (Push-to-Talk con F7)
 ```bash
-# Setup inicial (instala todas las dependencias)
-./setup.sh
+# Setup (solo una vez)
+source artifacts/kokoro-venv/bin/activate
+pip install pynput  # Para hotkey F7
 
-# O manualmente:
-python3 -m venv .venv
-source .venv/bin/activate
-pip install kokoro soundfile torch transformers sounddevice
-pip install nemo_toolkit['asr']
+# Ejecutar versión push-to-talk (RECOMMENDED)
+python spoken_assistant_ptt.py
 
-# Ejecutar asistente
+# Instrucciones:
+#   🔴 Mantén F7 pulsado para GRABAR
+#   ⏹️  Suelta F7 para PROCESAR y hablar
+#   ❌ ESC para salir
+```
+
+### Ejemplo de interacción (Push-to-Talk)
+```
+🎙️  SPOKEN ASSISTANT - Push to Talk (F7)
+============================================================
+✅ Listo! Pulsa F7 para empezar...
+============================================================
+
+🔴 GRABANDO... (suelta F7 para procesar)
+⏹️  Procesando...
+   Audio: 2.3s
+📝 Transcribiendo...
+   ES: "hola cómo estás"
+🌐 Traduciendo...
+   EN: "hello how are you"
+🔊 Generando voz...
+🔈 Reproduciendo...
+✅ Completado
+
+🔴 GRABANDO... (suelta F7 para procesar)
+...
+```
+
+### Versión Legacy (VAD automático)
+```bash
+# Versión con detección automática de voz (menos recomendada)
 python spoken_assistant.py
-```
-
-### Ejemplo de interacción
-```
-🎙️  Escuchando... (habla ahora)
-   ✓ Voz detectada, grabando...
-   📝 Transcribiendo con Parakeet...
-   ✓ Texto (ES): "hola cómo estás"
-   🌐 Traduciendo ES → EN...
-   ✓ Texto (EN): "hello how are you"
-   🔊 Generando audio con Kokoro...
-   ✓ Audio generado: 1.2s
-   🔈 Reproduciendo...
-   ✓ Reproducción completada
 ```
 
 ## Scripts Disponibles
 
-### Pipeline Principal
+### Pipeline Principal (Push-to-Talk) ⭐
 ```bash
-# Asistente de voz completo (STT → Translate → TTS)
+# Asistente push-to-talk con F7 (RECOMMENDED)
+python spoken_assistant_ptt.py
+```
+
+### Pipeline Legacy (VAD automático)
+```bash
+# Asistente con detección automática de voz
 python spoken_assistant.py
 
 # Setup de dependencias
