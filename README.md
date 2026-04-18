@@ -1,49 +1,53 @@
 # NicoBot - Speech-to-Speech AI Agent
 
-Un asistente de voz conversacional en tiempo real que combina speech-to-text de última generación, un agente inteligente con capacidad de ejecutar herramientas, y síntesis de voz streaming.
+Backend local de asistente de voz para macOS con push-to-talk.
 
-> **Estado del proyecto:** Push-to-talk implementado! `spoken_assistant_ptt.py` con F7 para grabar, soltar para procesar. STT (Parakeet v3) → Translate → TTS (Kokoro).
+Estado actual: backend funcional y limpio para empezar frontend y empaquetado.
 
----
+## Current backend
 
-## Estado Actual del Proyecto (17 Abril 2026)
+- Entrypoint principal: `spoken_assistant_ptt.py`
+- Control de grabación: `F7` (toggle), fallback `r` / barra espaciadora
+- Pipeline: `Parakeet v3 STT (es)` -> `traducción es->en` -> `Kokoro af_bella TTS`
+- Métricas por turno:
+  - tiempo STT
+  - tiempo TTS
 
-### ✅ Completado
+## Quick start
 
-#### Infraestructura de Voz (TTS)
-- **Benchmark exhaustivo** de motores TTS locales (12 probados)
-- **Motor seleccionado:** Kokoro `af_bella` (único motor activo)
-  - Voz: Femenina americana, Grade A, calidad premium
-  - RTF: ~0.21x (5× más rápido que tiempo real)
-  - Idioma: Inglés americano
-  - Setup trivial, ultra-rápido, calidad excelente
-  
-- **Motores evaluados y standby:**
-  - Qwen3-TTS MLX: Validado para español + voice cloning (reservado)
-  - Piper, MeloTTS, XTTS, etc.: Evaluados pero no seleccionados
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python spoken_assistant_ptt.py
+```
 
-- **Stack simplificado (fase inicial):**
-  - Una sola dependencia TTS: Kokoro
-  - Simplicidad máxima para desarrollo rápido
-  - Qwen3-TTS MLX standby para expansión futura
+## Controls
 
-### 🔄 En Progreso
+- `F7`: start/stop recording (toggle)
+- `r`: fallback start/stop recording
+- `space`: fallback start/stop recording
+- `q`: quit
 
-- **Pipeline STT → Translate → TTS:** ✅ Implementado
-  - **`spoken_assistant_ptt.py`**: Versión push-to-talk con F7 (RECOMMENDED)
-    - Mantén F7 pulsado para grabar
-    - Suelta F7 para procesar (STT → Translate → TTS → Play)
-    - Control total del usuario sobre cuándo grabar
-  - `spoken_assistant.py`: Versión con VAD automático (legacy)
+## Project structure
 
-### ⏳ Pendiente
+```text
+nicobot/
+├── spoken_assistant_ptt.py      # Backend runtime entrypoint
+├── requirements.txt             # Runtime dependencies
+├── README.md
+├── docs/
+│   ├── roadmap/ai-infra-roadmap.md
+│   └── backend-packaging-plan.md
+├── scripts/                     # Historical/benchmark scripts
+└── artifacts/.gitkeep
+```
 
-- Pipeline STT → Hermes → TTS completo
-- Pipeline STT → Hermes → TTS completo
-- UI mínima cuadrada con 3 estados
-- Validación de payloads de streaming de Hermes Agent
+## Notes
 
----
+- Model warmup happens before first recording so first turn is not delayed by loading.
+- For microphone issues, grant terminal microphone access in macOS Privacy settings.
+- Packaging and frontend handoff plan: `docs/backend-packaging-plan.md`.
 
 ## Visión
 

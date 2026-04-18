@@ -67,11 +67,8 @@ models/
 pretrained_models/
 
 # Audio artifacts (generated, not source)
-artifacts/tts-compare/
-artifacts/tts-benchmark/
-artifacts/tts-openvoice/
-artifacts/qwen3-test/
-artifacts/qwen3-mlx-test/
+artifacts/*
+!artifacts/.gitkeep
 *.wav
 !exemple/*.mp3
 

@@ -95,11 +95,12 @@ La Fase 1 (Infraestructura de Voz) ha sido **completada exitosamente**.
 - Voz af_bella validada
 - **Estado:** ✅ Completado
 
-### Paso 3 - Pipeline STT -> Kokoro TTS (CLI) ⏳ ACTUAL
-- Implementar pipeline completo en modo consola
-- STT (Parakeet) → Kokoro TTS
-- Output: audio hablado end-to-end
-- **Estado:** ⏳ En progreso - **SIGUIENTE TAREA**
+### Paso 3 - Pipeline STT -> Kokoro TTS (CLI) ✅ COMPLETADO
+- Pipeline completo en modo consola implementado
+- STT (Parakeet) -> Traducción ES->EN -> Kokoro TTS
+- Push-to-talk estable con toggle (`F7`, fallback `r`/space)
+- Métricas por turno (STT/TTS) visibles en terminal
+- **Estado:** ✅ Completado
 
 ### Paso 4 - Integración con Hermes Agent ⏳ PENDIENTE
 - Añadir Hermes Agent al pipeline
@@ -112,7 +113,13 @@ La Fase 1 (Infraestructura de Voz) ha sido **completada exitosamente**.
 - Foco en estabilidad
 - **Estado:** ⏳ Pendiente
 
-### Paso 6 - Re-evaluación de stack TTS ⏳ FUTURO
+### Paso 6 - Empaquetado app descargable ⏳ NUEVO
+- Congelar backend como servicio local empaquetado
+- Definir estrategia de distribución macOS (.app/.dmg)
+- Definir firma/notarización
+- **Estado:** ⏳ Pendiente
+
+### Paso 7 - Re-evaluación de stack TTS ⏳ FUTURO
 - Decidir si añadir Qwen3-TTS MLX para español
 - Evaluar necesidad de voz clonada (Cristina)
 - Decisión basada en feedback de uso
