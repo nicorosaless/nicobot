@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NicoBot</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a"></div>
+    <div class="bg-orb orb-b"></div>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>NicoBot</h1>
+          <p class="subtitle">Electron desktop shell · backend local</p>
+        </div>
+        <div class="actions">
+          <button id="restartBtn" class="btn ghost">Restart Backend</button>
+        </div>
+      </header>
+
+      <section class="status-row">
+        <div class="state-card">
+          <span class="label">Assistant State</span>
+          <span id="statePill" class="pill idle">idle</span>
+        </div>
+        <div class="state-card">
+          <span class="label">Push to Talk</span>
+          <button id="recordBtn" class="btn primary">Start / Stop</button>
+          <small>Mapped to backend toggle key</small>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel panel-main">
+          <h2>What To Show After Transcription</h2>
+          <p class="hint">
+            Proposed UX: keep both original and transformed text visible to build trust.
+          </p>
+
+          <div class="text-block">
+            <h3>Your speech (Spanish)</h3>
+            <p id="transcriptEs" class="text-output empty">No transcript yet.</p>
+          </div>
+
+          <div class="text-block">
+            <h3>Assistant speech text (English)</h3>
+            <p id="translatedEn" class="text-output empty">No translated text yet.</p>
+          </div>
+
+          <div class="ideas">
+            <h3>Display ideas once transcription is done</h3>
+            <ul>
+              <li>Confidence badge: high / medium / low for STT trust.</li>
+              <li>Editable transcript chip before speaking (quick correction).</li>
+              <li>Diff/highlight on translated phrase when changed by user.</li>
+              <li>One-tap replay and copy for last spoken output.</li>
+            </ul>
+          </div>
+        </article>
+
+        <aside class="panel panel-side">
+          <h2>Turn Metrics</h2>
+          <div class="metric">
+            <span>STT</span>
+            <strong id="metricStt">-</strong>
+          </div>
+          <div class="metric">
+            <span>TTS</span>
+            <strong id="metricTts">-</strong>
+          </div>
+
+          <h2 class="log-title">Recent Events</h2>
+          <div id="events" class="events"></div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+  </html>

@@ -46,6 +46,30 @@ nicobot/
 - Application roadmap: `docs/roadmap/ai-infra-roadmap.md`
 - Backend + packaging plan: `docs/backend-packaging-plan.md`
 
+## Electron app (new)
+
+An initial Electron shell is available in `app/`.
+
+Run it:
+
+```bash
+cd app
+npm install
+npm run dev
+```
+
+What it already shows:
+- current assistant state (`idle`, `recording`, `processing`, `speaking`)
+- transcript in Spanish
+- translated text in English
+- STT and TTS timing metrics
+- recent backend events/log lines
+
+UI idea after transcription (recommended default):
+- keep both "what user said" (ES) and "what assistant will speak" (EN)
+- show confidence/quality badge later
+- allow quick edit before speaking in next iteration
+
 ## Platform notes
 
 - macOS microphone permission must be enabled for your terminal/app.

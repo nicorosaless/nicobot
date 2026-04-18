@@ -1,0 +1,15 @@
+{
+  "name": "nicobot-desktop",
+  "version": "0.1.0",
+  "description": "Electron shell for NicoBot voice assistant",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron ."
+  },
+  "author": "nicorosaless",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.7.7"
+  }
+}

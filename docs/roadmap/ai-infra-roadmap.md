@@ -37,12 +37,12 @@ When to reconsider Rust:
 
 ### Phase B - Electron app shell
 
-- [ ] Create Electron app with 3 core states:
+- [x] Create Electron app with 3 core states:
   - idle
   - recording
   - processing/speaking
-- [ ] Wire UI controls to backend actions.
-- [ ] Render latency metrics in UI for each turn.
+- [x] Wire UI controls to backend actions.
+- [x] Render latency metrics in UI for each turn.
 - [ ] Add first-run setup panel (mic permissions, model warmup).
 
 ### Phase C - Backend/UI integration contract
