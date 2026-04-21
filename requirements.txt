@@ -1,7 +1,0 @@
-numpy
-sounddevice
-soundfile
-torch
-transformers
-kokoro
-nemo_toolkit[asr]

@@ -90,3 +90,20 @@ node_modules/
 # Keep directory structure but not contents
 !artifacts/.gitkeep
 !models/.gitkeep
+
+# Swift / Xcode
+frontend/.build/
+frontend/*.xcodeproj/
+frontend/DerivedData/
+*.xcworkspace/
+*.xcuserdata/
+xcuserdata/
+
+# Rust
+backend/target/
+
+# App bundle
+*.app/
+
+# Env
+.env

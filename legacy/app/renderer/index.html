@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NicoBot</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="backdrop glow-left"></div>
+    <div class="backdrop glow-right"></div>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand-group">
+          <div class="brand-mark">N</div>
+          <div>
+            <p class="eyebrow">Desktop agent by hotkeys</p>
+            <h1>NicoBot</h1>
+          </div>
+        </div>
+
+        <div class="top-actions">
+          <button id="toggleDebugBtn" class="ghost-btn" type="button">Debug</button>
+          <button id="resetBtn" class="ghost-btn" type="button">Reset session</button>
+        </div>
+      </header>
+
+      <section class="floating-bar panel">
+        <div class="floating-main">
+          <div class="floating-copy">
+            <span id="statePill" class="pill idle">idle</span>
+            <p class="floating-title">Hermes en espera</p>
+            <p class="floating-subtitle">
+              Abre el agente con la hotkey, recibe el greeting inicial y sigue por texto.
+            </p>
+          </div>
+
+          <div class="floating-actions">
+            <button id="openAgentBtn" class="primary-btn" type="button">Open agent</button>
+          </div>
+        </div>
+
+        <div class="bar-footer">
+          <label class="hotkey-control">
+            <span>Hotkey</span>
+            <select id="hotkeySelect">
+              <option value="CommandOrControl+Shift+Space">Ctrl/Cmd+Shift+Space</option>
+              <option value="F7">F7</option>
+              <option value="F8">F8</option>
+            </select>
+          </label>
+          <button id="setHotkeyBtn" class="ghost-btn small" type="button">Apply</button>
+        </div>
+      </section>
+
+      <section id="agentPanel" class="agent-stage panel closed">
+        <div class="agent-header">
+          <div>
+            <p class="eyebrow">Hermes Agent</p>
+            <h2>Conversation</h2>
+          </div>
+
+          <div class="agent-header-actions">
+            <span id="sessionLabel" class="session-label">session</span>
+            <button id="closeAgentBtn" class="ghost-btn small" type="button">Close</button>
+          </div>
+        </div>
+
+        <div id="messages" class="messages" aria-live="polite"></div>
+
+        <div id="errorBanner" class="error-banner hidden"></div>
+
+        <form id="composerForm" class="composer">
+          <label class="sr-only" for="promptInput">Prompt</label>
+          <textarea
+            id="promptInput"
+            rows="3"
+            placeholder="Escribe lo que necesitas y Hermes te responde aqui."
+          ></textarea>
+          <div class="composer-actions">
+            <p class="composer-hint">La v1 es textual. Voz y captura de pantalla llegan despues.</p>
+            <button id="sendBtn" class="primary-btn" type="submit">Send</button>
+          </div>
+        </form>
+      </section>
+
+      <aside id="debugPanel" class="debug-panel panel hidden">
+        <div class="debug-header">
+          <div>
+            <p class="eyebrow">Secondary diagnostics</p>
+            <h2>Debug events</h2>
+          </div>
+        </div>
+        <div id="events" class="events"></div>
+      </aside>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+  </html>

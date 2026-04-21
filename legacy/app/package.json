@@ -1,0 +1,15 @@
+{
+  "name": "nicobot-desktop",
+  "version": "0.1.0",
+  "description": "Electron shell for NicoBot hotkey agent",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron ."
+  },
+  "author": "nicorosaless",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^41.2.1"
+  }
+}
