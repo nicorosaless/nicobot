@@ -12,6 +12,7 @@ tower-http = { version = "0.5", features = ["cors", "trace"] }
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
 
 # HTTP client (for LLM/TTS proxy)
 reqwest = { version = "0.11", features = ["json", "stream"] }
@@ -36,3 +37,4 @@ time = { version = "0.3.36", features = ["macros", "formatting", "local-offset"]
 # Async utilities
 futures = "0.3"
 async-stream = "0.3"
+arc-swap = "1"

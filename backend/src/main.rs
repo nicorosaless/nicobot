@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use axum::Router;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
@@ -29,7 +30,7 @@ use services::SqliteService;
 #[derive(Clone)]
 pub struct AppState {
     pub db: Arc<SqliteService>,
-    pub config: Arc<Config>,
+    pub config: Arc<ArcSwap<Config>>,
 }
 
 #[tokio::main]
@@ -57,7 +58,7 @@ async fn main() {
 
     let state = AppState {
         db: Arc::new(db),
-        config: Arc::new(config.clone()),
+        config: Arc::new(ArcSwap::from_pointee(config.clone())),
     };
 
     let cors = CorsLayer::new()

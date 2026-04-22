@@ -30,7 +30,35 @@ enum ContentBlockGroup: Identifiable {
         }
     }
 
-    static func group(_ blocks: [ContentBlock]) -> [ContentBlockGroup] { [] }
+    static func group(_ blocks: [ContentBlock]) -> [ContentBlockGroup] {
+        var groups: [ContentBlockGroup] = []
+        var pendingToolCalls: [ContentBlock] = []
+
+        func flushToolCalls() {
+            guard !pendingToolCalls.isEmpty else { return }
+            groups.append(.toolCalls(UUID(), pendingToolCalls))
+            pendingToolCalls.removeAll()
+        }
+
+        for block in blocks {
+            switch block {
+            case .toolCall:
+                pendingToolCalls.append(block)
+            case .text(let id, let text):
+                flushToolCalls()
+                groups.append(.text(id, text))
+            case .thinking(let id, let text):
+                flushToolCalls()
+                groups.append(.thinking(id, text))
+            case .discoveryCard(let id, let title, let subtitle, let body):
+                flushToolCalls()
+                groups.append(.discoveryCard(id, title, subtitle, body))
+            }
+        }
+
+        flushToolCalls()
+        return groups
+    }
 }
 
 // MARK: - Recording timer stub

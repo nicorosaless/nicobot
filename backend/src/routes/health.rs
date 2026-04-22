@@ -28,7 +28,8 @@ async fn health_check() -> Json<HealthResponse> {
 }
 
 async fn hermes_health(State(state): State<AppState>) -> Json<HermesHealthResponse> {
-    let url = format!("http://127.0.0.1:{}/health", state.config.hermes_port);
+    let config = state.config.load_full();
+    let url = format!("http://127.0.0.1:{}/health", config.hermes_port);
     let healthy = match reqwest::Client::new().get(url).send().await {
         Ok(resp) => resp.status().is_success(),
         Err(e) => {

@@ -17,17 +17,13 @@ async fn llm_proxy(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    let key = state
-        .config
+    let config = state.config.load_full();
+    let key = config
         .llm_api_key
         .as_deref()
         .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
-    let url = format!(
-        "{}/{}",
-        state.config.llm_api_url.trim_end_matches('/'),
-        path
-    );
+    let url = format!("{}/{}", config.llm_api_url.trim_end_matches('/'), path);
 
     let client = reqwest::Client::new();
     let mut req = client.post(&url).bearer_auth(key).body(body.to_vec());

@@ -80,15 +80,19 @@ if ! [ -x "$ROOT_DIR/.venv/bin/hermes" ]; then
   "$ROOT_DIR/.venv/bin/python" -m pip install "git+https://github.com/NousResearch/hermes-agent.git"
 fi
 
-log "Writing Hermes config"
 mkdir -p "$HOME/.hermes"
-cat > "$HOME/.hermes/config.yaml" <<EOF
+if [ ! -f "$HOME/.hermes/config.yaml" ]; then
+  log "Writing Hermes config"
+  cat > "$HOME/.hermes/config.yaml" <<EOF
 model:
   provider: "custom"
   api_key: "$HERMES_API_KEY"
   base_url: "$HERMES_API_URL"
   default: "$HERMES_MODEL"
 EOF
+else
+  log "Keeping existing Hermes config"
+fi
 
 log "Starting Hermes Agent"
 "$ROOT_DIR/.venv/bin/hermes" gateway run --replace &

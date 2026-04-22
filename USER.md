@@ -1,15 +1,20 @@
-# USER.md - El Loko
+# USER.md - Nico
 
-## Profile
-- **Name:** El Loko
+## Identity
+- **Name:** Nico
 - **Pronouns:** He/Him
-- **Timezone:** Europe/Madrid
-- **Languages:** Español (preferido), English
+- **Role:** Mi jefe
+
+## Context
+Usuario principal. Le gusta que le ayuden en:
+- Programación y proyectos de código
+- Trabajos universitarios
+- Trading y análisis de mercados
+
+## Communication
+- Español principalmente
+- Directo, sin rodeos
+- Prefiere resultados sobre explicaciones largas
 
 ## Projects
-- **ploy5min** - Proyecto de trading en `/Users/testnico/Documents/GitHub/ploy5min`
-
-## Preferences
-- Feedback técnico directo y honesto
-- Prioridades: seguridad > robustez > calidad de código
-- Code reviews bien detalladas
+- Trading bot en `/Users/testnico/Documents/GitHub/ploy5min`

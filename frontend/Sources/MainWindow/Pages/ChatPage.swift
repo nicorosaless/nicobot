@@ -59,10 +59,13 @@ struct ChatPage: View {
                     }
                     .padding(.vertical, 16)
                 }
-                .onChange(of: chatProvider.messages.count) { _ in
+                .onChange(of: chatProvider.messages.count) {
                     withAnimation { proxy.scrollTo("bottom") }
                 }
-                .onChange(of: chatProvider.messages.last?.content) { _ in
+                .onChange(of: chatProvider.messages.last?.content) {
+                    proxy.scrollTo("bottom")
+                }
+                .onChange(of: chatProvider.messages.last?.contentBlocks.count) {
                     proxy.scrollTo("bottom")
                 }
             }
@@ -136,15 +139,7 @@ private struct MessageBubble: View {
                     .frame(width: 28, height: 28)
                     .overlay(Text("H").font(.system(size: 12, weight: .bold)).foregroundColor(.accentColor))
             }
-            Text(message.content.isEmpty && message.isStreaming ? "..." : message.content)
-                .font(.system(size: 14))
-                .foregroundColor(.white)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(isUser ? Color.accentColor.opacity(0.2) : Color.white.opacity(0.07))
-                .cornerRadius(12)
+            messageContent
             if isUser {
                 Circle()
                     .fill(Color.blue.opacity(0.3))
@@ -154,5 +149,51 @@ private struct MessageBubble: View {
             if !isUser { Spacer(minLength: 60) }
         }
         .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private var messageContent: some View {
+        if isUser {
+            Text(message.content)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.accentColor.opacity(0.2))
+                .cornerRadius(12)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(ContentBlockGroup.group(message.contentBlocks)) { group in
+                    switch group {
+                    case .toolCalls(_, let blocks):
+                        ToolCallGroupView(blocks: blocks)
+                    case .text(_, let text), .thinking(_, let text):
+                        Text(text)
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray)
+                    case .discoveryCard(_, let title, let subtitle, let body):
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(title).font(.system(size: 13, weight: .semibold))
+                            Text(subtitle).font(.system(size: 12)).foregroundColor(.gray)
+                            Text(body).font(.system(size: 12)).foregroundColor(.gray)
+                        }
+                    }
+                }
+
+                if !message.content.isEmpty || (message.isStreaming && message.contentBlocks.isEmpty) {
+                    Text(message.content.isEmpty ? "..." : message.content)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.07))
+            .cornerRadius(12)
+        }
     }
 }

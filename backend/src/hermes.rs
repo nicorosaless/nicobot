@@ -10,6 +10,12 @@ struct ChatRequest {
     messages: Vec<ChatMsg>,
     #[serde(skip_serializing_if = "Option::is_none")]
     stream: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -51,10 +57,32 @@ struct StreamDelta {
     content: Option<String>,
 }
 
+#[derive(Clone, Debug)]
+pub enum StreamItem {
+    Token(String),
+    ToolProgress {
+        tool: String,
+        emoji: String,
+        label: String,
+    },
+}
+
 #[derive(Debug, PartialEq)]
 enum ChatCompletionSseItem {
     Token(String),
+    ToolProgress {
+        tool: String,
+        emoji: String,
+        label: String,
+    },
     Done,
+}
+
+#[derive(Deserialize)]
+struct ToolProgressPayload {
+    tool: String,
+    emoji: String,
+    label: String,
 }
 
 #[derive(Default)]
@@ -88,7 +116,7 @@ pub async fn generate_response(
     history: &[(String, String)],
     config: &Config,
 ) -> String {
-    let messages = build_chat_messages(prompt, history);
+    let messages = build_chat_messages(prompt, history, &config.system_prompt);
     let endpoints = chat_endpoints(config);
     let client = reqwest::Client::new();
     let mut last_error = None;
@@ -102,6 +130,9 @@ pub async fn generate_response(
             model: endpoint.model.clone(),
             messages: messages.clone(),
             stream: None,
+            temperature: Some(config.temperature),
+            top_p: Some(config.top_p),
+            max_tokens: config.max_tokens,
         };
 
         match send_chat_request(&client, &url, endpoint.api_key.as_deref(), &body).await {
@@ -282,11 +313,14 @@ fn should_use_stub_fallback(
     endpoints.len() == 1 && matches!(last_error, Some(ChatGatewayError::Transport(_)) | None)
 }
 
-fn build_chat_messages(prompt: &str, history: &[(String, String)]) -> Vec<ChatMsg> {
+fn build_chat_messages(
+    prompt: &str,
+    history: &[(String, String)],
+    system_prompt: &str,
+) -> Vec<ChatMsg> {
     let mut messages = vec![ChatMsg {
         role: "system".to_string(),
-        content: "Eres Umi, un asistente de escritorio conciso y útil. Responde de forma directa."
-            .to_string(),
+        content: system_prompt.to_string(),
     }];
     for (role, content) in history {
         messages.push(ChatMsg {
@@ -305,8 +339,8 @@ pub async fn generate_response_stream(
     prompt: &str,
     history: &[(String, String)],
     config: &Config,
-) -> Pin<Box<dyn Stream<Item = String> + Send>> {
-    let messages = build_chat_messages(prompt, history);
+) -> Pin<Box<dyn Stream<Item = StreamItem> + Send>> {
+    let messages = build_chat_messages(prompt, history, &config.system_prompt);
     let endpoints = chat_endpoints(config);
     let client = reqwest::Client::new();
     let mut last_error = None;
@@ -320,6 +354,9 @@ pub async fn generate_response_stream(
             model: endpoint.model.clone(),
             messages: messages.clone(),
             stream: Some(true),
+            temperature: Some(config.temperature),
+            top_p: Some(config.top_p),
+            max_tokens: config.max_tokens,
         };
 
         match open_chat_stream(&client, &url, endpoint.api_key.as_deref(), &body).await {
@@ -342,7 +379,7 @@ pub async fn generate_response_stream(
     let msg = last_error
         .map(|(service, err)| err.user_message(service))
         .unwrap_or_else(|| stub_response(prompt));
-    Box::pin(async_stream::stream! { yield msg; })
+    Box::pin(async_stream::stream! { yield StreamItem::Token(msg); })
 }
 
 async fn open_chat_stream(
@@ -350,7 +387,7 @@ async fn open_chat_stream(
     url: &str,
     api_key: Option<&str>,
     body: &ChatRequest,
-) -> Result<Pin<Box<dyn Stream<Item = String> + Send>>, ChatGatewayError> {
+) -> Result<Pin<Box<dyn Stream<Item = StreamItem> + Send>>, ChatGatewayError> {
     let mut request = client.post(url).json(body);
 
     if let Some(api_key) = api_key {
@@ -379,7 +416,10 @@ async fn open_chat_stream(
 
             for parsed in parser.push_bytes(&bytes) {
                 match parsed {
-                    Ok(ChatCompletionSseItem::Token(content)) => yield content,
+                    Ok(ChatCompletionSseItem::Token(content)) => yield StreamItem::Token(content),
+                    Ok(ChatCompletionSseItem::ToolProgress { tool, emoji, label }) => {
+                        yield StreamItem::ToolProgress { tool, emoji, label };
+                    }
                     Ok(ChatCompletionSseItem::Done) => return,
                     Err(e) => tracing::warn!("Ignoring malformed chat completion SSE event: {}", e),
                 }
@@ -442,7 +482,21 @@ fn parse_chat_completion_sse_event(raw_event: &[u8]) -> Vec<Result<ChatCompletio
         }
     }
 
-    if matches!(event_name.as_deref(), Some("hermes.tool.progress")) || data.is_empty() {
+    if matches!(event_name.as_deref(), Some("hermes.tool.progress")) {
+        if data.is_empty() {
+            return Vec::new();
+        }
+        return match serde_json::from_str::<ToolProgressPayload>(&data) {
+            Ok(payload) => vec![Ok(ChatCompletionSseItem::ToolProgress {
+                tool: payload.tool,
+                emoji: payload.emoji,
+                label: payload.label,
+            })],
+            Err(e) => vec![Err(format!("{} while parsing {}", e, data))],
+        };
+    }
+
+    if data.is_empty() {
         return Vec::new();
     }
 
@@ -463,13 +517,13 @@ fn parse_chat_completion_sse_event(raw_event: &[u8]) -> Vec<Result<ChatCompletio
     }
 }
 
-fn stream_text_incrementally(text: String) -> Pin<Box<dyn Stream<Item = String> + Send>> {
+fn stream_text_incrementally(text: String) -> Pin<Box<dyn Stream<Item = StreamItem> + Send>> {
     let chunks: Vec<String> = text.split_inclusive(' ').map(str::to_string).collect();
 
     Box::pin(async_stream::stream! {
         for chunk in chunks {
             if !chunk.is_empty() {
-                yield chunk;
+                yield StreamItem::Token(chunk);
             }
         }
     })
@@ -527,10 +581,19 @@ mod tests {
     }
 
     #[test]
-    fn ignores_hermes_tool_progress_events() {
-        let items = parse_all(&[b"event: hermes.tool.progress\ndata: {\"tool\":\"terminal\"}\n\n"]);
+    fn parses_hermes_tool_progress_events() {
+        let items = parse_all(&[
+            b"event: hermes.tool.progress\ndata: {\"tool\":\"terminal\",\"emoji\":\"\xF0\x9F\x92\xBB\",\"label\":\"ls\"}\n\n",
+        ]);
 
-        assert!(items.is_empty());
+        assert_eq!(
+            items,
+            vec![Ok(ChatCompletionSseItem::ToolProgress {
+                tool: "terminal".to_string(),
+                emoji: "💻".to_string(),
+                label: "ls".to_string()
+            })]
+        );
     }
 
     #[test]

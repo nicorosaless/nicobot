@@ -13,7 +13,7 @@ struct ChatMessage: Identifiable {
         set { content = newValue }
     }
     var sender: MessageSender { role == "user" ? .user : .ai }
-    var contentBlocks: [ContentBlock] { [] }
+    var contentBlocks: [ContentBlock] = []
     var isStreaming: Bool = false
     var isSynced: Bool { true }
 
@@ -52,6 +52,12 @@ private struct ChatMessageResponse: Decodable {
         case messageId = "message_id"
         case response
     }
+}
+
+private struct ToolProgressPayload: Decodable {
+    let tool: String
+    let emoji: String
+    let label: String
 }
 
 @MainActor
@@ -183,12 +189,15 @@ class ChatProvider: ObservableObject {
                     if currentEvent == "tok" {
                         await appendAssistantToken(currentData, at: idx)
                         tokenCount += 1
+                    } else if currentEvent == "tool" {
+                        appendToolProgress(currentData, at: idx)
                     } else if currentEvent == "done" {
                         if let d = currentData.data(using: .utf8),
                            let json = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
                            let sid = json["session_id"] as? String {
                             sessionId = sid
                         }
+                        markAllToolCallsCompleted(at: idx)
                         messages[idx].isStreaming = false
                         isLoading = false
                         log("ChatProvider: stream done tokens=\(tokenCount) chars=\(messages[idx].content.count)")
@@ -209,7 +218,10 @@ class ChatProvider: ObservableObject {
             if currentEvent == "tok" {
                 await appendAssistantToken(currentData, at: idx)
                 tokenCount += 1
+            } else if currentEvent == "tool" {
+                appendToolProgress(currentData, at: idx)
             }
+            markAllToolCallsCompleted(at: idx)
             messages[idx].isStreaming = false
             if messages[idx].content.isEmpty {
                 log("ChatProvider: empty stream, requesting non-streaming fallback")
@@ -280,9 +292,48 @@ class ChatProvider: ObservableObject {
     private func appendAssistantToken(_ token: String, at index: Int) async {
         guard messages.indices.contains(index), !token.isEmpty else { return }
         var updated = messages[index]
+        markLastToolCallCompleted(in: &updated)
         updated.content += token
         messages[index] = updated
         await pauseForVisibleStreaming()
+    }
+
+    private func appendToolProgress(_ data: String, at index: Int) {
+        guard messages.indices.contains(index),
+              let jsonData = data.data(using: .utf8),
+              let payload = try? JSONDecoder().decode(ToolProgressPayload.self, from: jsonData)
+        else { return }
+
+        var updated = messages[index]
+        markLastToolCallCompleted(in: &updated)
+        let displayLabel = payload.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let toolLabel = displayLabel.isEmpty || displayLabel == payload.tool
+            ? "\(payload.emoji) \(payload.tool)"
+            : "\(payload.emoji) \(payload.tool) · \(displayLabel)"
+        updated.contentBlocks.append(.toolCall(UUID(), toolLabel, "running"))
+        messages[index] = updated
+    }
+
+    private func markLastToolCallCompleted(in message: inout ChatMessage) {
+        for index in message.contentBlocks.indices.reversed() {
+            if case .toolCall(let id, let label, let status) = message.contentBlocks[index],
+               status == "running" {
+                message.contentBlocks[index] = .toolCall(id, label, "completed")
+                return
+            }
+        }
+    }
+
+    private func markAllToolCallsCompleted(at index: Int) {
+        guard messages.indices.contains(index) else { return }
+        var updated = messages[index]
+        for blockIndex in updated.contentBlocks.indices {
+            if case .toolCall(let id, let label, let status) = updated.contentBlocks[blockIndex],
+               status == "running" {
+                updated.contentBlocks[blockIndex] = .toolCall(id, label, "completed")
+            }
+        }
+        messages[index] = updated
     }
 
     private func revealAssistantText(_ text: String, at index: Int) async {

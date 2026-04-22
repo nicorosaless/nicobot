@@ -139,6 +139,28 @@ private struct HermesSettingsSection: View {
     @AppStorage("hermes_system_prompt") private var systemPrompt = ""
     @AppStorage("hermes_reasoning_effort") private var reasoningEffort = "medium"
     @AppStorage("hermes_max_turns") private var maxTurns = 10
+    @AppStorage("hermes_temperature") private var temperature = 0.7
+    @AppStorage("hermes_top_p") private var topP = 1.0
+    @AppStorage("hermes_max_tokens") private var maxTokens = 0
+    @AppStorage("hermes_history_length") private var historyLength = 20
+    @AppStorage("hermes_tool_web") private var toolWeb = true
+    @AppStorage("hermes_tool_browser") private var toolBrowser = true
+    @AppStorage("hermes_tool_terminal") private var toolTerminal = true
+    @AppStorage("hermes_tool_file") private var toolFile = true
+    @AppStorage("hermes_tool_code_execution") private var toolCodeExecution = true
+    @AppStorage("hermes_tool_vision") private var toolVision = true
+    @AppStorage("hermes_tool_image_gen") private var toolImageGen = true
+    @AppStorage("hermes_tool_moa") private var toolMoA = false
+    @AppStorage("hermes_tool_tts") private var toolTTS = true
+    @AppStorage("hermes_tool_skills") private var toolSkills = true
+    @AppStorage("hermes_tool_todo") private var toolTodo = true
+    @AppStorage("hermes_tool_memory") private var toolMemory = true
+    @AppStorage("hermes_tool_session_search") private var toolSessionSearch = true
+    @AppStorage("hermes_tool_clarify") private var toolClarify = true
+    @AppStorage("hermes_tool_delegation") private var toolDelegation = true
+    @AppStorage("hermes_tool_cronjob") private var toolCronjob = true
+    @AppStorage("hermes_tool_messaging") private var toolMessaging = true
+    @AppStorage("hermes_tool_homeassistant") private var toolHomeAssistant = false
 
     @State private var status: HermesStatus = .checking
     @State private var isSaving = false
@@ -253,12 +275,96 @@ private struct HermesSettingsSection: View {
                             .font(.system(size: 11))
                             .foregroundColor(.gray)
                     }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Temperature: \(temperature.formatted(.number.precision(.fractionLength(2))))")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white)
+                        Slider(value: $temperature, in: 0...2, step: 0.05)
+                            .frame(maxWidth: 300)
+                        Text("Más bajo = más determinista. Más alto = más creativo.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Top-p: \(topP.formatted(.number.precision(.fractionLength(2))))")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white)
+                        Slider(value: $topP, in: 0...1, step: 0.05)
+                            .frame(maxWidth: 300)
+                        Text("Limita la probabilidad acumulada de tokens candidatos.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Max tokens")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white)
+                        TextField("0", value: $maxTokens, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 120)
+                        Text("0 = sin límite explícito.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Contexto: \(historyLength) mensajes")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white)
+                        Slider(value: Binding(
+                            get: { Double(historyLength) },
+                            set: { historyLength = Int($0) }
+                        ), in: 2...100, step: 1)
+                        .frame(maxWidth: 300)
+                        Text("Cuántos mensajes previos se envían como contexto al agente.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                    }
                 }
                 .padding(.top, 10)
             } label: {
                 Text("Parámetros avanzados del agente")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white)
+            }
+
+            SettingsGroupBox(title: "Herramientas") {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), alignment: .leading),
+                        GridItem(.flexible(), alignment: .leading),
+                    ],
+                    alignment: .leading,
+                    spacing: 10
+                ) {
+                    ToolToggleRow(title: "Web Search", isOn: $toolWeb)
+                    ToolToggleRow(title: "Browser", isOn: $toolBrowser)
+                    ToolToggleRow(title: "Terminal", isOn: $toolTerminal)
+                    ToolToggleRow(title: "File Ops", isOn: $toolFile)
+                    ToolToggleRow(title: "Code Exec", isOn: $toolCodeExecution)
+                    ToolToggleRow(title: "Vision", isOn: $toolVision)
+                    ToolToggleRow(title: "Image Gen", isOn: $toolImageGen)
+                    ToolToggleRow(title: "MoA", isOn: $toolMoA)
+                    ToolToggleRow(title: "TTS", isOn: $toolTTS)
+                    ToolToggleRow(title: "Skills", isOn: $toolSkills)
+                    ToolToggleRow(title: "Todo", isOn: $toolTodo)
+                    ToolToggleRow(title: "Memory", isOn: $toolMemory)
+                    ToolToggleRow(title: "Session Search", isOn: $toolSessionSearch)
+                    ToolToggleRow(title: "Clarify", isOn: $toolClarify)
+                    ToolToggleRow(title: "Delegation", isOn: $toolDelegation)
+                    ToolToggleRow(title: "Cron Jobs", isOn: $toolCronjob)
+                    ToolToggleRow(title: "Messaging", isOn: $toolMessaging)
+                    ToolToggleRow(title: "Home Assistant", isOn: $toolHomeAssistant)
+                }
+
+                Text("Los cambios de herramientas se escriben en ~/.hermes/config.yaml y requieren reiniciar Hermes Agent.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
             }
 
             // Save
@@ -270,7 +376,7 @@ private struct HermesSettingsSection: View {
                 }
                 .disabled(isSaving || apiURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                Text("Tras guardar, reinicia: Ctrl+C en terminal \u{2192} ./run.sh")
+                Text("Prompt y generación se aplican al backend al guardar. Herramientas requieren reiniciar Hermes.")
                     .font(.system(size: 12))
                     .foregroundColor(.gray)
             }
@@ -300,6 +406,7 @@ private struct HermesSettingsSection: View {
         }
         .task {
             applyPresetIfNeeded()
+            await loadCurrentConfig()
             await refreshStatus()
         }
     }
@@ -313,6 +420,31 @@ private struct HermesSettingsSection: View {
         guard preset != .custom else { return }
         apiURL = preset.apiURL
         model = preset.defaultModel
+    }
+
+    @MainActor
+    private func loadCurrentConfig() async {
+        do {
+            let config: HermesConfigPayload = try await APIClient.shared.get("/v1/hermes/config")
+            if !HermesProvider.allCases.contains(where: { $0.apiURL == config.apiURL }) {
+                provider = HermesProvider.custom.rawValue
+            }
+            if let apiKey = config.apiKey {
+                self.apiKey = apiKey
+            }
+            apiURL = config.apiURL
+            model = config.model
+            systemPrompt = config.systemPrompt
+            reasoningEffort = config.reasoningEffort
+            maxTurns = config.maxTurns
+            temperature = config.temperature
+            topP = config.topP
+            maxTokens = config.maxTokens ?? 0
+            historyLength = config.historyLength
+            applyEnabledTools(Set(config.enabledTools))
+        } catch {
+            logError("SettingsPage: failed to load Hermes config", error: error)
+        }
     }
 
     @MainActor
@@ -338,7 +470,12 @@ private struct HermesSettingsSection: View {
                 model: model,
                 systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
                 reasoningEffort: reasoningEffort,
-                maxTurns: maxTurns
+                maxTurns: maxTurns,
+                temperature: temperature,
+                topP: topP,
+                maxTokens: maxTokens > 0 ? maxTokens : nil,
+                historyLength: historyLength,
+                enabledTools: enabledTools
             )
             let response: HermesConfigResponse = try await APIClient.shared.post("/v1/hermes/config", body: request)
             saveMessage = response.message
@@ -346,6 +483,50 @@ private struct HermesSettingsSection: View {
         } catch {
             saveMessage = "Error al guardar: \(error.localizedDescription)"
         }
+    }
+
+    private var enabledTools: [String] {
+        var tools: [String] = []
+        if toolWeb { tools.append("web") }
+        if toolBrowser { tools.append("browser") }
+        if toolTerminal { tools.append("terminal") }
+        if toolFile { tools.append("file") }
+        if toolCodeExecution { tools.append("code_execution") }
+        if toolVision { tools.append("vision") }
+        if toolImageGen { tools.append("image_gen") }
+        if toolMoA { tools.append("moa") }
+        if toolTTS { tools.append("tts") }
+        if toolSkills { tools.append("skills") }
+        if toolTodo { tools.append("todo") }
+        if toolMemory { tools.append("memory") }
+        if toolSessionSearch { tools.append("session_search") }
+        if toolClarify { tools.append("clarify") }
+        if toolDelegation { tools.append("delegation") }
+        if toolCronjob { tools.append("cronjob") }
+        if toolMessaging { tools.append("messaging") }
+        if toolHomeAssistant { tools.append("homeassistant") }
+        return tools
+    }
+
+    private func applyEnabledTools(_ tools: Set<String>) {
+        toolWeb = tools.contains("web")
+        toolBrowser = tools.contains("browser")
+        toolTerminal = tools.contains("terminal")
+        toolFile = tools.contains("file")
+        toolCodeExecution = tools.contains("code_execution")
+        toolVision = tools.contains("vision")
+        toolImageGen = tools.contains("image_gen")
+        toolMoA = tools.contains("moa")
+        toolTTS = tools.contains("tts")
+        toolSkills = tools.contains("skills")
+        toolTodo = tools.contains("todo")
+        toolMemory = tools.contains("memory")
+        toolSessionSearch = tools.contains("session_search")
+        toolClarify = tools.contains("clarify")
+        toolDelegation = tools.contains("delegation")
+        toolCronjob = tools.contains("cronjob")
+        toolMessaging = tools.contains("messaging")
+        toolHomeAssistant = tools.contains("homeassistant")
     }
 }
 
@@ -408,13 +589,18 @@ private struct HermesHealthResponse: Decodable {
     let hermes: Bool
 }
 
-private struct HermesConfigRequest: Encodable {
-    let apiKey: String
+private struct HermesConfigPayload: Decodable {
+    let apiKey: String?
     let apiURL: String
     let model: String
-    let systemPrompt: String?
+    let systemPrompt: String
     let reasoningEffort: String
     let maxTurns: Int
+    let temperature: Double
+    let topP: Double
+    let maxTokens: Int?
+    let historyLength: Int
+    let enabledTools: [String]
 
     enum CodingKeys: String, CodingKey {
         case apiKey = "api_key"
@@ -423,6 +609,39 @@ private struct HermesConfigRequest: Encodable {
         case systemPrompt = "system_prompt"
         case reasoningEffort = "reasoning_effort"
         case maxTurns = "max_turns"
+        case temperature
+        case topP = "top_p"
+        case maxTokens = "max_tokens"
+        case historyLength = "history_length"
+        case enabledTools = "enabled_tools"
+    }
+}
+
+private struct HermesConfigRequest: Encodable {
+    let apiKey: String
+    let apiURL: String
+    let model: String
+    let systemPrompt: String?
+    let reasoningEffort: String
+    let maxTurns: Int
+    let temperature: Double
+    let topP: Double
+    let maxTokens: Int?
+    let historyLength: Int
+    let enabledTools: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case apiKey = "api_key"
+        case apiURL = "api_url"
+        case model
+        case systemPrompt = "system_prompt"
+        case reasoningEffort = "reasoning_effort"
+        case maxTurns = "max_turns"
+        case temperature
+        case topP = "top_p"
+        case maxTokens = "max_tokens"
+        case historyLength = "history_length"
+        case enabledTools = "enabled_tools"
     }
 }
 
@@ -511,6 +730,19 @@ private struct SettingsGroupBox<Content: View>: View {
         .padding(14)
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.4))
         .cornerRadius(8)
+    }
+}
+
+private struct ToolToggleRow: View {
+    let title: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(title, isOn: $isOn)
+            .font(.system(size: 13))
+            .foregroundColor(.white)
+            .toggleStyle(.switch)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

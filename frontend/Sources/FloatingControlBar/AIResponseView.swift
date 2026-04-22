@@ -36,7 +36,32 @@ struct AIResponseView: View {
                             questionBar
                         }
 
-                        if isLoading {
+                        if let msg = currentMessage, !msg.contentBlocks.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(ContentBlockGroup.group(msg.contentBlocks)) { group in
+                                    switch group {
+                                    case .toolCalls(_, let blocks):
+                                        ToolCallGroupView(blocks: blocks)
+                                    case .text(_, let text), .thinking(_, let text):
+                                        Text(text)
+                                            .scaledFont(size: 13)
+                                            .foregroundColor(.secondary)
+                                    case .discoveryCard(_, let title, let subtitle, let body):
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(title).scaledFont(size: 13, weight: .semibold)
+                                            Text(subtitle).scaledFont(size: 12).foregroundColor(.secondary)
+                                            Text(body).scaledFont(size: 12).foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+
+                                if !msg.text.isEmpty {
+                                    Markdown(msg.text)
+                                        .markdownTheme(.gitHub)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        } else if isLoading {
                             HStack(spacing: 8) {
                                 ProgressView().scaleEffect(0.7)
                                 Text("Thinking…")
@@ -64,6 +89,9 @@ struct AIResponseView: View {
                     )
                 }
                 .onChange(of: currentMessage?.text) {
+                    withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
+                .onChange(of: currentMessage?.contentBlocks.count) {
                     withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
                 .onChange(of: chatHistory.count) {
