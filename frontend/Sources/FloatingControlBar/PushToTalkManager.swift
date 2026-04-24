@@ -1,15 +1,15 @@
+import AVFoundation
 import Cocoa
 import Combine
 
 /// Push-to-talk manager for voice input.
 ///
 /// State machine:
-///   idle → [shortcut down] → listening → [shortcut up] → finalizing → sends query → idle
+///   idle → [hotkey/shortcut down] → listening → [hotkey/shortcut up or tap] → finalizing → sends query → idle
 ///   idle → [quick tap] → pendingLockDecision → [tap again within 400ms] → lockedListening
 ///   pendingLockDecision → [timeout] → finalizing → sends query → idle
 ///
-/// NOTE: Actual audio transcription is not yet implemented in Umi v1.
-/// The key monitoring and UI state machine are preserved for when STT is added.
+/// STT: Parakeet v3 0.6B ONNX via ParakeetSTTService.
 @MainActor
 class PushToTalkManager: ObservableObject {
     static let shared = PushToTalkManager()
@@ -29,6 +29,8 @@ class PushToTalkManager: ObservableObject {
     private var finalizeWorkItem: DispatchWorkItem?
     private var isCurrentSessionFollowUp = false
 
+    // MARK: - STT (Parakeet v3 0.6B ONNX via ParakeetSTTService)
+
     private init() {}
 
     func setup(barState: FloatingControlBarState) {
@@ -38,6 +40,7 @@ class PushToTalkManager: ObservableObject {
     }
 
     func cleanup() {
+        stopSTT()
         state = .idle
         removeEventMonitors()
         log("PushToTalkManager: cleanup complete")
@@ -63,7 +66,7 @@ class PushToTalkManager: ObservableObject {
         if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
     }
 
-    // MARK: - Shortcut Handling
+    // MARK: - Shortcut Handling (modifier-only PTT keys)
 
     private func handleShortcutEvent(_ event: NSEvent) {
         guard ShortcutSettings.shared.pttEnabled else { return }
@@ -137,6 +140,23 @@ class PushToTalkManager: ObservableObject {
         }
     }
 
+    // MARK: - Hotkey-triggered toggle (Carbon global hotkey → any key combo)
+
+    /// Called by the Carbon global hotkey — toggles locked-listening mode on/off.
+    func handleHotkeyTap() {
+        switch state {
+        case .idle:
+            if !FloatingControlBarManager.shared.isVisible {
+                FloatingControlBarManager.shared.show()
+            }
+            enterLockedListening()
+        case .listening, .lockedListening, .pendingLockDecision:
+            finalize()
+        case .finalizing:
+            break
+        }
+    }
+
     // MARK: - Listening Lifecycle
 
     private func startListening() {
@@ -153,7 +173,8 @@ class PushToTalkManager: ObservableObject {
         }
 
         updateBarState()
-        log("PushToTalkManager: started listening (STT not yet implemented)")
+        beginSTT()
+        log("PushToTalkManager: started listening")
     }
 
     private func enterLockedListening() {
@@ -163,6 +184,7 @@ class PushToTalkManager: ObservableObject {
         state = .lockedListening
         isCurrentSessionFollowUp = barState?.showingAIResponse == true
         updateBarState()
+        beginSTT()
         log("PushToTalkManager: entered locked listening")
     }
 
@@ -184,6 +206,7 @@ class PushToTalkManager: ObservableObject {
     func cancelListening() {
         guard state != .idle else { return }
         log("PushToTalkManager: cancelling listening")
+        Task { await ParakeetSTTService.shared.stop() }
         state = .idle
         finalizeWorkItem?.cancel()
         finalizeWorkItem = nil
@@ -205,12 +228,42 @@ class PushToTalkManager: ObservableObject {
             sound?.play()
         }
 
-        // STT not implemented yet — send empty transcript
         isCurrentSessionFollowUp = false
-        state = .idle
         updateBarState(skipResize: wasFollowUp)
 
-        log("PushToTalkManager: finalized (STT not yet implemented, no transcript sent)")
+        Task { @MainActor in
+            let transcript = await ParakeetSTTService.shared.stop()
+            guard self.state == .finalizing else { return }
+            self.state = .idle
+            self.updateBarState(skipResize: wasFollowUp)
+            if !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                log("PushToTalkManager: sending transcript '\(transcript)'")
+                FloatingControlBarManager.shared.openAIInputWithQuery(transcript, fromVoice: true)
+            } else {
+                FloatingControlBarManager.shared.openAIInput()
+            }
+        }
+    }
+
+    // MARK: - STT
+
+    private func beginSTT() {
+        Task { @MainActor in
+            await ParakeetSTTService.shared.start(
+                updateHandler: { [weak self] partial in
+                    self?.barState?.voiceTranscript = partial
+                },
+                levelCallback: { [weak self] level in
+                    self?.barState?.micLevel = level
+                }
+            )
+        }
+    }
+
+    @discardableResult
+    private func stopSTT() -> String {
+        // Synchronous wrapper — actual async transcript fetched in finalize()
+        return ""
     }
 
     // MARK: - Bar State Sync
@@ -225,8 +278,6 @@ class PushToTalkManager: ObservableObject {
         if !isShowingVoiceUI {
             barState.voiceTranscript = ""
             barState.voiceFollowUpTranscript = ""
-        } else {
-            barState.voiceTranscript = "🎤 STT coming soon"
         }
 
         let isOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")

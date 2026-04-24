@@ -22,6 +22,36 @@ use crate::AppState;
 const PROFILE_BLOCK_START: &str = "\n\n<!-- umi-persistent-profile:start -->\n";
 const PROFILE_BLOCK_END: &str = "\n<!-- umi-persistent-profile:end -->";
 
+fn clean_for_tts(s: &str) -> String {
+    // Strip markdown syntax
+    let mut out = s
+        .replace("**", "")
+        .replace("__", "")
+        .replace("*", "")
+        .replace("_", "")
+        .replace("```", "")
+        .replace("`", "");
+    // Strip leading # heading markers
+    while out.starts_with('#') {
+        out = out.trim_start_matches('#').trim_start().to_string();
+    }
+    // Strip emoji (common Unicode blocks)
+    out.chars()
+        .filter(|&c| {
+            !matches!(c,
+                '\u{1F000}'..='\u{1FFFF}'
+                | '\u{2600}'..='\u{27BF}'
+                | '\u{2B00}'..='\u{2BFF}'
+                | '\u{FE00}'..='\u{FE0F}'
+                | '\u{E0000}'..='\u{E007F}'
+            )
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[derive(Deserialize)]
 pub struct SendMessageRequest {
     pub session_id: Option<String>,
@@ -256,16 +286,6 @@ async fn handle_ws_chat(mut socket: WebSocket, state: AppState) {
 
     let mut full_response = String::new();
     let mut sentence_buf = String::new();
-    let planning_msg = serde_json::json!({
-        "t": "tool",
-        "tool": "plan",
-        "emoji": "🧭",
-        "label": "Voy a revisar la petición y elegir la herramienta adecuada"
-    })
-    .to_string();
-    if socket.send(Message::Text(planning_msg)).await.is_err() {
-        return;
-    }
 
     while let Some(item) = token_stream.next().await {
         match item {
@@ -286,9 +306,10 @@ async fn handle_ws_chat(mut socket: WebSocket, state: AppState) {
                         Some(pos) => {
                             let sentence = sentence_buf[..=pos].trim().to_string();
                             sentence_buf = sentence_buf[pos + 1..].to_string();
-                            if sentence.len() > 1 {
+                            let clean = clean_for_tts(&sentence);
+                            if clean.len() > 1 {
                                 let sent_msg =
-                                    serde_json::json!({"t": "sent", "d": sentence}).to_string();
+                                    serde_json::json!({"t": "sent", "d": clean}).to_string();
                                 let _ = socket.send(Message::Text(sent_msg)).await;
                             }
                         }
@@ -430,14 +451,6 @@ async fn stream_chat(
         let mut full_response = String::new();
         let mut sentence_buf = String::new();
 
-        yield Ok(Event::default().event("tool").data(
-            serde_json::json!({
-                "tool": "plan",
-                "emoji": "🧭",
-                "label": "Voy a revisar la petición y elegir la herramienta adecuada"
-            }).to_string(),
-        ));
-
         while let Some(item) = token_stream.next().await {
             match item {
                 StreamItem::Token(token) => {
@@ -452,8 +465,9 @@ async fn stream_chat(
                             Some(pos) => {
                                 let sentence = sentence_buf[..=pos].trim().to_string();
                                 sentence_buf = sentence_buf[pos + 1..].to_string();
-                                if sentence.len() > 1 {
-                                    yield Ok(Event::default().event("sent").data(sentence));
+                                let clean = clean_for_tts(&sentence);
+                                if clean.len() > 1 {
+                                    yield Ok(Event::default().event("sent").data(clean));
                                 }
                             }
                         }

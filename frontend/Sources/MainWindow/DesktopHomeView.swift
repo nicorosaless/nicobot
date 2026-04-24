@@ -33,6 +33,14 @@ struct DesktopHomeView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             viewModelContainer.setup()
+            FloatingControlBarManager.shared.setup(
+                appState: appState,
+                chatProvider: viewModelContainer.chatProvider
+            )
+            // Preload Parakeet models in background so first hotkey press is instant
+            Task.detached(priority: .background) {
+                await ParakeetSTTService.shared.preload()
+            }
         }
     }
 }

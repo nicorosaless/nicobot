@@ -112,9 +112,9 @@ class GlobalShortcutManager {
 
         switch id {
         case .askOmi:
-            NSLog("GlobalShortcutManager: Ask Omi shortcut detected")
+            NSLog("GlobalShortcutManager: hotkey detected → toggling voice input")
             DispatchQueue.main.async {
-                FloatingControlBarManager.shared.toggleAIInput()
+                PushToTalkManager.shared.handleHotkeyTap()
             }
         }
 

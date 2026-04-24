@@ -295,7 +295,6 @@ class ChatProvider: ObservableObject {
         markLastToolCallCompleted(in: &updated)
         updated.content += token
         messages[index] = updated
-        await pauseForVisibleStreaming()
     }
 
     private func appendToolProgress(_ data: String, at index: Int) {
@@ -306,12 +305,30 @@ class ChatProvider: ObservableObject {
 
         var updated = messages[index]
         markLastToolCallCompleted(in: &updated)
-        let displayLabel = payload.label.trimmingCharacters(in: .whitespacesAndNewlines)
-        let toolLabel = displayLabel.isEmpty || displayLabel == payload.tool
-            ? "\(payload.emoji) \(payload.tool)"
-            : "\(payload.emoji) \(payload.tool) · \(displayLabel)"
-        updated.contentBlocks.append(.toolCall(UUID(), toolLabel, "running"))
+
+        // Compact chip in contentBlocks for animated status indicator
+        let chipLabel = "\(payload.emoji) \(friendlyToolName(payload.tool))"
+        updated.contentBlocks.append(.toolCall(UUID(), chipLabel, "running"))
         messages[index] = updated
+    }
+
+    private func friendlyToolName(_ tool: String) -> String {
+        switch tool {
+        case "web_search", "search", "web": return "Búsqueda web"
+        case "browser", "navigate", "click", "type": return "Navegador"
+        case "terminal", "shell", "bash", "process": return "Terminal"
+        case "write_file", "file.write", "file_write": return "Escritura"
+        case "read_file", "file.read", "file_read": return "Lectura"
+        case "patch", "apply_patch", "file.patch": return "Modificación"
+        case "execute_code", "code_execution": return "Ejecución de código"
+        case "vision", "vision_analyze": return "Análisis de imagen"
+        case "image_generate", "image_gen": return "Generación de imagen"
+        case "memory", "memory.write": return "Memoria"
+        case "todo": return "Lista de tareas"
+        case "plan": return "Planificación"
+        case "config.write": return "Configuración"
+        default: return tool
+        }
     }
 
     private func markLastToolCallCompleted(in message: inout ChatMessage) {
@@ -359,10 +376,6 @@ class ChatProvider: ObservableObject {
             chunks.append(buffer)
         }
         return chunks
-    }
-
-    private func pauseForVisibleStreaming() async {
-        try? await Task.sleep(nanoseconds: 18_000_000)
     }
 
     private func checkJSONEndpoint(_ path: String) async -> Bool {

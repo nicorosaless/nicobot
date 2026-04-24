@@ -97,34 +97,140 @@ private struct GeneralSettingsSection: View {
 // MARK: - Shortcuts Settings
 private struct ShortcutsSettingsSection: View {
     @ObservedObject private var settings = ShortcutSettings.shared
+    @State private var isRecording = false
+    @State private var eventMonitor: Any?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 24) {
             Text("Shortcuts")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.white)
 
-            VStack(alignment: .leading, spacing: 12) {
-                Toggle("Ask Umi shortcut", isOn: $settings.askOmiEnabled)
-                    .font(.system(size: 14)).foregroundColor(.white).toggleStyle(.switch)
-                Text(settings.askOmiShortcut.displayLabel)
-                    .font(.system(size: 13, design: .monospaced)).foregroundColor(.gray)
+            // Single hotkey block
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Hotkey de activación")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("Pulsa el hotkey para abrir el floating bar e iniciar el dictado de voz.")
+                        .font(.system(size: 12))
+                        .foregroundColor(OmiColors.textTertiary)
+                }
 
-                Divider()
+                Toggle("Activado", isOn: $settings.askOmiEnabled)
+                    .font(.system(size: 13)).foregroundColor(.white).toggleStyle(.switch)
 
-                Toggle("Push-to-talk", isOn: $settings.pttEnabled)
-                    .font(.system(size: 14)).foregroundColor(.white).toggleStyle(.switch)
-                Text(settings.pttShortcut.displayLabel)
-                    .font(.system(size: 13, design: .monospaced)).foregroundColor(.gray)
+                // Preset chips
+                HStack(spacing: 8) {
+                    ForEach(ShortcutSettings.askOmiPresets, id: \.self) { preset in
+                        HotkeyChip(
+                            label: preset.displayLabel,
+                            isSelected: !isRecording && settings.askOmiShortcut == preset
+                        ) {
+                            stopRecording()
+                            settings.askOmiShortcut = preset
+                        }
+                    }
+                }
 
-                Divider()
+                // Custom recording row
+                HStack(spacing: 12) {
+                    Button {
+                        isRecording ? stopRecording() : startRecording()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: isRecording ? "record.circle.fill" : "keyboard")
+                                .font(.system(size: 12))
+                            Text(isRecording ? "Presiona la combinación…" : "Shortcut personalizado")
+                                .font(.system(size: 12))
+                        }
+                        .foregroundColor(isRecording ? .red : OmiColors.textTertiary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(isRecording ? Color.red.opacity(0.1) : Color.white.opacity(0.06))
+                        .cornerRadius(7)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7)
+                                .stroke(isRecording ? Color.red.opacity(0.4) : Color.white.opacity(0.1), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
 
-                Toggle("Draggable floating bar", isOn: $settings.draggableBarEnabled)
-                    .font(.system(size: 14)).foregroundColor(.white).toggleStyle(.switch)
-                Toggle("PTT sounds", isOn: $settings.pttSoundsEnabled)
-                    .font(.system(size: 14)).foregroundColor(.white).toggleStyle(.switch)
+                    if isRecording {
+                        Text("Esc para cancelar")
+                            .font(.system(size: 11))
+                            .foregroundColor(OmiColors.textQuaternary)
+                    } else if !ShortcutSettings.askOmiPresets.contains(settings.askOmiShortcut) {
+                        HotkeyChip(label: settings.askOmiShortcut.displayLabel, isSelected: true) {}
+                    }
+                }
+            }
+            .padding(16)
+            .background(OmiColors.backgroundSecondary)
+            .cornerRadius(10)
+
+            // Misc
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Floating bar arrastrable", isOn: $settings.draggableBarEnabled)
+                    .font(.system(size: 13)).foregroundColor(.white).toggleStyle(.switch)
+                Toggle("Sonidos al activar / detener", isOn: $settings.pttSoundsEnabled)
+                    .font(.system(size: 13)).foregroundColor(.white).toggleStyle(.switch)
             }
         }
+        .onDisappear { stopRecording() }
+    }
+
+    private func startRecording() {
+        isRecording = true
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
+            if event.keyCode == 53 { // Escape
+                DispatchQueue.main.async { self.stopRecording() }
+                return nil
+            }
+            if let shortcut = ShortcutSettings.KeyboardShortcut.fromRecordingEvent(event, allowModifierOnly: false),
+               shortcut.supportsGlobalHotKey {
+                DispatchQueue.main.async {
+                    self.settings.askOmiShortcut = shortcut
+                    self.stopRecording()
+                }
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func stopRecording() {
+        isRecording = false
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+    }
+}
+
+private struct HotkeyChip: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundColor(isSelected ? .white : OmiColors.textTertiary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(isSelected ? OmiColors.purplePrimary : OmiColors.backgroundTertiary)
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(
+                            isSelected ? Color.clear : OmiColors.border.opacity(0.5),
+                            lineWidth: 1
+                        )
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 

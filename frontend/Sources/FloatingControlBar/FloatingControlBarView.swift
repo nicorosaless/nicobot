@@ -136,10 +136,6 @@ struct FloatingControlBarView: View {
                 aiResponseView
                     .id("response")
                     .zIndex(1)
-            } else {
-                aiInputView
-                    .id("input")
-                    .zIndex(1)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -242,14 +238,8 @@ struct FloatingControlBarView: View {
                     .frame(height: 50)
                     .transition(.opacity)
             } else if isHovering || state.showingAIConversation {
-                VStack(spacing: 1) {
-                    compactButton(title: "Ask Umi / Collapse", keys: shortcutSettings.askOmiShortcut.displayTokens) {
-                        onAskAI()
-                    }
-
-                    HStack(spacing: 6) {
-                        compactLabel("Push to talk", keys: shortcutSettings.pttShortcut.displayTokens)
-                    }
+                HStack(spacing: 6) {
+                    compactLabel("Push to talk", keys: shortcutSettings.pttShortcut.displayTokens)
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
@@ -315,44 +305,7 @@ struct FloatingControlBarView: View {
     }
 
     private var voiceListeningView: some View {
-        HStack(spacing: 8) {
-            // Pulsing mic icon
-            Circle()
-                .fill(Color.red)
-                .frame(width: 10, height: 10)
-                .scaleEffect(state.isVoiceListening ? 1.2 : 1.0)
-                .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: state.isVoiceListening)
-
-            Image(systemName: "mic.fill")
-                .scaledFont(size: 14, weight: .semibold)
-                .foregroundColor(.white)
-
-            if state.isVoiceLocked {
-                Text("LOCKED")
-                    .scaledFont(size: 10, weight: .bold)
-                    .foregroundColor(.orange)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.2))
-                    .cornerRadius(4)
-            }
-
-            if !state.voiceTranscript.isEmpty {
-                Text(state.voiceTranscript)
-                    .scaledFont(size: 13)
-                    .foregroundColor(.white.opacity(0.8))
-                    .lineLimit(1)
-                    .truncationMode(.head)
-            } else {
-                Text(
-                    state.isVoiceLocked
-                        ? "Tap \(shortcutSettings.pttShortcut.displayLabel) to send"
-                        : "Release \(shortcutSettings.pttShortcut.displayLabel) to send"
-                )
-                    .scaledFont(size: 13)
-                    .foregroundColor(.white.opacity(0.5))
-            }
-        }
+        VoiceWaveformView(micLevel: state.micLevel, isLocked: state.isVoiceLocked)
     }
 
     private var aiInputView: some View {

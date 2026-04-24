@@ -36,7 +36,10 @@ enum ContentBlockGroup: Identifiable {
 
         func flushToolCalls() {
             guard !pendingToolCalls.isEmpty else { return }
-            groups.append(.toolCalls(UUID(), pendingToolCalls))
+            // Use first toolCall's UUID for stable ForEach identity across re-renders
+            var groupId = UUID()
+            if case .toolCall(let id, _, _) = pendingToolCalls[0] { groupId = id }
+            groups.append(.toolCalls(groupId, pendingToolCalls))
             pendingToolCalls.removeAll()
         }
 

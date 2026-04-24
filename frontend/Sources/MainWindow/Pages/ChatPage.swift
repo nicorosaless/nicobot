@@ -1,3 +1,4 @@
+import MarkdownUI
 import SwiftUI
 struct ChatPage: View {
     @ObservedObject var chatProvider: ChatProvider
@@ -171,23 +172,27 @@ private struct MessageBubble: View {
                         ToolCallGroupView(blocks: blocks)
                     case .text(_, let text), .thinking(_, let text):
                         Text(text)
-                            .font(.system(size: 13))
-                            .foregroundColor(.gray)
+                            .font(.system(size: 12))
+                            .foregroundColor(OmiColors.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
                     case .discoveryCard(_, let title, let subtitle, let body):
                         VStack(alignment: .leading, spacing: 2) {
                             Text(title).font(.system(size: 13, weight: .semibold))
-                            Text(subtitle).font(.system(size: 12)).foregroundColor(.gray)
-                            Text(body).font(.system(size: 12)).foregroundColor(.gray)
+                            Text(subtitle).font(.system(size: 12)).foregroundColor(OmiColors.textTertiary)
+                            Text(body).font(.system(size: 12)).foregroundColor(OmiColors.textTertiary)
                         }
                     }
                 }
 
                 if !message.content.isEmpty || (message.isStreaming && message.contentBlocks.isEmpty) {
-                    Text(message.content.isEmpty ? "..." : message.content)
-                        .font(.system(size: 14))
-                        .foregroundColor(.white)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if message.content.isEmpty {
+                        Text("...").font(.system(size: 14)).foregroundColor(OmiColors.textQuaternary)
+                    } else {
+                        Markdown(message.content)
+                            .markdownTheme(.gitHub)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
                 }
             }
             .padding(.horizontal, 12)

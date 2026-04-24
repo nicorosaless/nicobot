@@ -3,6 +3,9 @@ use futures::{Stream, StreamExt};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
+use std::sync::LazyLock;
+
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 #[derive(Serialize)]
 struct ChatRequest {
@@ -118,7 +121,6 @@ pub async fn generate_response(
 ) -> String {
     let messages = build_chat_messages(prompt, history, &config.system_prompt);
     let endpoints = chat_endpoints(config);
-    let client = reqwest::Client::new();
     let mut last_error = None;
 
     for endpoint in &endpoints {
@@ -135,7 +137,7 @@ pub async fn generate_response(
             max_tokens: config.max_tokens,
         };
 
-        match send_chat_request(&client, &url, endpoint.api_key.as_deref(), &body).await {
+        match send_chat_request(&*HTTP_CLIENT, &url, endpoint.api_key.as_deref(), &body).await {
             Ok(content) => return content,
             Err(e) => {
                 tracing::error!("{} request failed: {}", endpoint.service, e.log_message());
@@ -342,7 +344,6 @@ pub async fn generate_response_stream(
 ) -> Pin<Box<dyn Stream<Item = StreamItem> + Send>> {
     let messages = build_chat_messages(prompt, history, &config.system_prompt);
     let endpoints = chat_endpoints(config);
-    let client = reqwest::Client::new();
     let mut last_error = None;
 
     for endpoint in &endpoints {
@@ -359,7 +360,7 @@ pub async fn generate_response_stream(
             max_tokens: config.max_tokens,
         };
 
-        match open_chat_stream(&client, &url, endpoint.api_key.as_deref(), &body).await {
+        match open_chat_stream(&*HTTP_CLIENT, &url, endpoint.api_key.as_deref(), &body).await {
             Ok(stream) => return stream,
             Err(e) => {
                 tracing::error!(

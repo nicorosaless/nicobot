@@ -38,7 +38,9 @@
     <key>NSAppleEventsUsageDescription</key>
     <string>Omi needs permission to detect which application is currently active.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Omi needs microphone access to transcribe your conversations in real-time.</string>
+    <string>Umi necesita acceso al micrófono para transcribir tu voz en tiempo real.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Umi necesita permiso de reconocimiento de voz para transcribir lo que dices al asistente.</string>
     <key>NSAudioCaptureUsageDescription</key>
     <string>Omi needs permission to capture system audio for transcription of calls and meetings.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
@@ -54,16 +56,5 @@
             </array>
         </dict>
     </array>
-    <!-- Sparkle Auto-Update Configuration -->
-    <key>SUFeedURL</key>
-    <string>https://api.omi.me/v2/desktop/appcast.xml</string>
-    <key>SUPublicEDKey</key>
-    <string>vWleho4gIOl932wM4v9Gz+FTCt90+vUVdPHsRReFX40=</string>
-    <key>SUEnableAutomaticChecks</key>
-    <true/>
-    <key>SUAutomaticallyUpdate</key>
-    <false/>
-    <key>SUScheduledCheckInterval</key>
-    <integer>600</integer>
 </dict>
 </plist>
