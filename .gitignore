@@ -28,12 +28,16 @@ env/
 .venv311/
 .venv310/
 
-# IDE
+# IDE / AI tool artifacts
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.codex/
+.factory/
+camera_capture.py
+ideasui/
 
 # macOS
 .DS_Store

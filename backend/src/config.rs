@@ -76,8 +76,12 @@ pub struct Config {
     pub llm_model: String,
     /// STT API key (future)
     pub stt_api_key: Option<String>,
-    /// TTS API key (future)
+    /// TTS API key (ElevenLabs fallback)
     pub tts_api_key: Option<String>,
+    /// Chatterbox TTS sidecar URL
+    pub chatterbox_tts_url: Option<String>,
+    /// Chatterbox default voice reference ID
+    pub chatterbox_default_voice_id: String,
     /// SQLite database path
     pub db_path: String,
     /// System prompt injected into chat requests.
@@ -121,6 +125,8 @@ impl Config {
             llm_model: env::var("LLM_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string()),
             stt_api_key: env::var("STT_API_KEY").ok(),
             tts_api_key: env::var("TTS_API_KEY").ok(),
+            chatterbox_tts_url: env::var("CHATTERBOX_TTS_URL").ok(),
+            chatterbox_default_voice_id: env::var("CHATTERBOX_DEFAULT_VOICE_ID").unwrap_or_else(|_| "cristina".to_string()),
             db_path: env::var("DB_PATH").unwrap_or_else(|_| "/tmp/umi.db".to_string()),
             system_prompt: env::var("HERMES_SYSTEM_PROMPT")
                 .ok()

@@ -4,10 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_PID=""
 HERMES_PID=""
+CHATTERBOX_PID=""
 
 cleanup() {
   if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
     kill "$BACKEND_PID" 2>/dev/null || true
+  fi
+  if [ -n "$CHATTERBOX_PID" ] && kill -0 "$CHATTERBOX_PID" 2>/dev/null; then
+    kill "$CHATTERBOX_PID" 2>/dev/null || true
   fi
   "$ROOT_DIR/.venv/bin/hermes" gateway stop 2>/dev/null || true
 }
@@ -41,6 +45,7 @@ fi
 
 BACKEND_PORT="${PORT:-10201}"
 HERMES_PORT="${HERMES_PORT:-8642}"
+CHATTERBOX_PORT="${CHATTERBOX_PORT:-10202}"
 APP_NAME="${UMI_APP_NAME:-Umi Dev}"
 APP_BUNDLE="$ROOT_DIR/build/$APP_NAME.app"
 HERMES_API_URL="${HERMES_API_URL:-https://api.fireworks.ai/inference/v1}"
@@ -55,12 +60,14 @@ export API_SERVER_ENABLED API_SERVER_HOST API_SERVER_PORT API_SERVER_MODEL_NAME
 log "Stopping old local services"
 pkill -x "Umi" 2>/dev/null || true
 pkill -x "umi-backend" 2>/dev/null || true
+pkill -f "$ROOT_DIR/.venv-tts/bin/python.*main.py" 2>/dev/null || true
 "$ROOT_DIR/.venv/bin/hermes" gateway stop 2>/dev/null || true
 pkill -f "$ROOT_DIR/.venv/bin/hermes gateway run" 2>/dev/null || true
 rm -f "$HOME/.hermes/gateway.pid" 2>/dev/null || true
 sleep 1
 
-log "Preparing Python environment"
+# ── Hermes venv ──────────────────────────────────────────────────────────────
+log "Preparing Hermes Python environment"
 PYTHON_BIN="${HERMES_PYTHON_BIN:-}"
 if [ -z "$PYTHON_BIN" ]; then
   if command -v python3.11 >/dev/null 2>&1; then
@@ -94,11 +101,38 @@ else
   log "Keeping existing Hermes config"
 fi
 
+# ── Chatterbox TTS venv ────────────────────────────────────────────────────
+log "Preparing Chatterbox TTS environment"
+if [ ! -d "$ROOT_DIR/.venv-tts" ]; then
+  "$PYTHON_BIN" -m venv "$ROOT_DIR/.venv-tts"
+fi
+
+if ! [ -f "$ROOT_DIR/.venv-tts/bin/chatterbox-tts-installed" ]; then
+  log "Installing Chatterbox TTS dependencies (this may take a while)"
+  "$ROOT_DIR/.venv-tts/bin/python" -m pip install --upgrade pip >/dev/null
+  "$ROOT_DIR/.venv-tts/bin/python" -m pip install -r "$ROOT_DIR/services/chatterbox_tts/requirements.txt"
+  touch "$ROOT_DIR/.venv-tts/bin/chatterbox-tts-installed"
+fi
+
+export HF_TOKEN="${HF_TOKEN:-}"
+export CHATTERBOX_PORT="$CHATTERBOX_PORT"
+export CHATTERBOX_HOST="127.0.0.1"
+export CHATTERBOX_VOICES_DIR="$ROOT_DIR/services/chatterbox_tts/voices"
+export CHATTERBOX_DEFAULT_VOICE_ID="${CHATTERBOX_DEFAULT_VOICE_ID:-cristina}"
+export CHATTERBOX_DEVICE="${CHATTERBOX_DEVICE:-auto}"
+
+log "Starting Chatterbox TTS sidecar"
+"$ROOT_DIR/.venv-tts/bin/python" "$ROOT_DIR/services/chatterbox_tts/main.py" &
+CHATTERBOX_PID=$!
+wait_for_health "Chatterbox TTS" "http://127.0.0.1:$CHATTERBOX_PORT/health" 20 || true
+
+# ── Hermes Agent ─────────────────────────────────────────────────────────────
 log "Starting Hermes Agent"
 "$ROOT_DIR/.venv/bin/hermes" gateway run --replace &
 HERMES_PID=$!
 wait_for_health "Hermes Agent" "http://127.0.0.1:$HERMES_PORT/health" 15
 
+# ── Rust backend ─────────────────────────────────────────────────────────────
 log "Building Rust backend"
 cargo build --release --manifest-path "$ROOT_DIR/backend/Cargo.toml"
 
@@ -107,6 +141,7 @@ log "Starting Rust backend"
 BACKEND_PID=$!
 wait_for_health "Umi backend" "http://127.0.0.1:$BACKEND_PORT/health" 10
 
+# ── Swift frontend ────────────────────────────────────────────────────────────
 log "Building Swift frontend"
 xcrun swift build -c debug --package-path "$ROOT_DIR/frontend"
 
@@ -131,6 +166,7 @@ log "Opening Umi"
 open "$APP_BUNDLE"
 
 log "Services running"
-printf 'Hermes Agent: http://127.0.0.1:%s (PID %s)\n' "$HERMES_PORT" "$HERMES_PID"
-printf 'Umi backend:  http://127.0.0.1:%s (PID %s)\n' "$BACKEND_PORT" "$BACKEND_PID"
+printf 'Hermes Agent:   http://127.0.0.1:%s (PID %s)\n' "$HERMES_PORT" "$HERMES_PID"
+printf 'Chatterbox TTS: http://127.0.0.1:%s (PID %s)\n' "$CHATTERBOX_PORT" "$CHATTERBOX_PID"
+printf 'Umi backend:    http://127.0.0.1:%s (PID %s)\n' "$BACKEND_PORT" "$BACKEND_PID"
 wait "$BACKEND_PID"
