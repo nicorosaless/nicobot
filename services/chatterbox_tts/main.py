@@ -15,6 +15,7 @@ from typing import Optional
 
 import torch
 import torchaudio as ta
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -66,21 +67,21 @@ def resolve_voice_path(voice_id: Optional[str]) -> Optional[Path]:
             return c
     return None
 
-# ── FastAPI app ──────────────────────────────────────────────────────────────
-app = FastAPI(title="Chatterbox Turbo TTS Sidecar")
-
-class GenerateRequest(BaseModel):
-    text: str
-    voice_id: Optional[str] = None
-
-@app.on_event("startup")
-async def startup():
-    # Warm-up: preload model on first request or eager here
+# ── FastAPI lifespan ─────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     try:
         get_model()
     except Exception as e:
         print(f"[chatterbox] ERROR preloading model: {e}", file=sys.stderr, flush=True)
         traceback.print_exc()
+    yield
+
+app = FastAPI(title="Chatterbox Turbo TTS Sidecar", lifespan=lifespan)
+
+class GenerateRequest(BaseModel):
+    text: str
+    voice_id: Optional[str] = None
 
 @app.get("/health")
 async def health():
@@ -96,7 +97,6 @@ async def generate(req: GenerateRequest):
 
     voice_path = resolve_voice_path(req.voice_id)
     if voice_path is None:
-        # If no voice reference found, we cannot clone; return informative error
         raise HTTPException(
             status_code=400,
             detail=f"No voice reference found for '{req.voice_id or DEFAULT_VOICE_ID}' in {VOICES_DIR}"
@@ -108,7 +108,6 @@ async def generate(req: GenerateRequest):
         gen_time = time.time() - t0
         print(f"[chatterbox] Generated {len(wav)} samples in {gen_time:.2f}s", file=sys.stderr, flush=True)
 
-        # Write to temporary WAV file and read bytes
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp_path = tmp.name
         ta.save(tmp_path, wav, sr)

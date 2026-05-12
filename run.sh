@@ -115,6 +115,7 @@ if ! [ -f "$ROOT_DIR/.venv-tts/bin/chatterbox-tts-installed" ]; then
 fi
 
 export HF_TOKEN="${HF_TOKEN:-}"
+export HF_HOME="${HF_HOME:-$ROOT_DIR/.cache/huggingface}"
 export CHATTERBOX_PORT="$CHATTERBOX_PORT"
 export CHATTERBOX_HOST="127.0.0.1"
 export CHATTERBOX_VOICES_DIR="$ROOT_DIR/services/chatterbox_tts/voices"

@@ -27,6 +27,7 @@ env/
 .venv/
 .venv311/
 .venv310/
+.venv-tts/
 
 # IDE / AI tool artifacts
 .vscode/
@@ -43,6 +44,9 @@ ideasui/
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Local caches
+.cache/
 
 # Cache
 .ruff_cache/
