@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_PID=""
 HERMES_PID=""
-CHATTERBOX_PID=""
 KOKORO_PID=""
 
 cleanup() {
@@ -13,9 +12,6 @@ cleanup() {
   fi
   if [ -n "$KOKORO_PID" ] && kill -0 "$KOKORO_PID" 2>/dev/null; then
     kill "$KOKORO_PID" 2>/dev/null || true
-  fi
-  if [ -n "$CHATTERBOX_PID" ] && kill -0 "$CHATTERBOX_PID" 2>/dev/null; then
-    kill "$CHATTERBOX_PID" 2>/dev/null || true
   fi
   "$ROOT_DIR/.venv/bin/hermes" gateway stop 2>/dev/null || true
 }
@@ -49,7 +45,6 @@ fi
 
 BACKEND_PORT="${PORT:-10201}"
 HERMES_PORT="${HERMES_PORT:-8642}"
-CHATTERBOX_PORT="${CHATTERBOX_PORT:-10202}"
 KOKORO_PORT="${KOKORO_PORT:-10203}"
 APP_NAME="${UMI_APP_NAME:-Umi Dev}"
 APP_BUNDLE="$ROOT_DIR/build/$APP_NAME.app"
@@ -106,33 +101,19 @@ else
   log "Keeping existing Hermes config"
 fi
 
-# ── Chatterbox TTS venv ────────────────────────────────────────────────────
-log "Preparing Chatterbox TTS environment"
+# ── Kokoro TTS venv ────────────────────────────────────────────────────────
+log "Preparing Kokoro TTS environment"
 if [ ! -d "$ROOT_DIR/.venv-tts" ]; then
   "$PYTHON_BIN" -m venv "$ROOT_DIR/.venv-tts"
 fi
 
-if ! [ -f "$ROOT_DIR/.venv-tts/bin/chatterbox-tts-installed" ]; then
-  log "Installing Chatterbox TTS dependencies (this may take a while)"
+if ! [ -f "$ROOT_DIR/.venv-tts/bin/kokoro-installed" ]; then
+  log "Installing Kokoro TTS dependencies"
   "$ROOT_DIR/.venv-tts/bin/python" -m pip install --upgrade pip >/dev/null
-  "$ROOT_DIR/.venv-tts/bin/python" -m pip install -r "$ROOT_DIR/services/chatterbox_tts/requirements.txt"
-  touch "$ROOT_DIR/.venv-tts/bin/chatterbox-tts-installed"
+  "$ROOT_DIR/.venv-tts/bin/python" -m pip install -r "$ROOT_DIR/services/kokoro_tts/requirements.txt"
+  touch "$ROOT_DIR/.venv-tts/bin/kokoro-installed"
 fi
 
-export HF_TOKEN="${HF_TOKEN:-}"
-export HF_HOME="${HF_HOME:-$ROOT_DIR/.cache/huggingface}"
-export CHATTERBOX_PORT="$CHATTERBOX_PORT"
-export CHATTERBOX_HOST="127.0.0.1"
-export CHATTERBOX_VOICES_DIR="$ROOT_DIR/services/chatterbox_tts/voices"
-export CHATTERBOX_DEFAULT_VOICE_ID="${CHATTERBOX_DEFAULT_VOICE_ID:-cristina}"
-export CHATTERBOX_DEVICE="${CHATTERBOX_DEVICE:-auto}"
-
-log "Starting Chatterbox TTS sidecar"
-"$ROOT_DIR/.venv-tts/bin/python" "$ROOT_DIR/services/chatterbox_tts/main.py" &
-CHATTERBOX_PID=$!
-wait_for_health "Chatterbox TTS" "http://127.0.0.1:$CHATTERBOX_PORT/health" 20 || true
-
-# ── Kokoro TTS sidecar ─────────────────────────────────────────────────────
 export KOKORO_PORT="${KOKORO_PORT:-10203}"
 export KOKORO_HOST="127.0.0.1"
 
@@ -181,8 +162,7 @@ log "Opening Umi"
 open "$APP_BUNDLE"
 
 log "Services running"
-printf 'Hermes Agent:   http://127.0.0.1:%s (PID %s)\n' "$HERMES_PORT" "$HERMES_PID"
-printf 'Chatterbox TTS: http://127.0.0.1:%s (PID %s)\n' "$CHATTERBOX_PORT" "$CHATTERBOX_PID"
-printf 'Kokoro TTS:     http://127.0.0.1:%s (PID %s)\n' "$KOKORO_PORT" "$KOKORO_PID"
-printf 'Umi backend:    http://127.0.0.1:%s (PID %s)\n' "$BACKEND_PORT" "$BACKEND_PID"
+printf 'Hermes Agent: http://127.0.0.1:%s (PID %s)\n' "$HERMES_PORT" "$HERMES_PID"
+printf 'Kokoro TTS:   http://127.0.0.1:%s (PID %s)\n' "$KOKORO_PORT" "$KOKORO_PID"
+printf 'Umi backend:  http://127.0.0.1:%s (PID %s)\n' "$BACKEND_PORT" "$BACKEND_PID"
 wait "$BACKEND_PID"

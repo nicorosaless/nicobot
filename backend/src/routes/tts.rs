@@ -235,24 +235,13 @@ async fn synthesize(
         match kokoro_result {
             Ok(response) => return Ok(response),
             Err(StatusCode::BAD_GATEWAY) => {
-                tracing::info!("Kokoro failed; trying Chatterbox fallback");
+                tracing::info!("Kokoro failed; trying ElevenLabs fallback");
             }
             Err(other) => return Err(other),
         }
     }
 
-    // 2) Fallback to Chatterbox (voice clone quality, slower)
-    if let Some(chatterbox_result) = try_chatterbox(&config, &req).await {
-        match chatterbox_result {
-            Ok(response) => return Ok(response),
-            Err(StatusCode::BAD_GATEWAY) => {
-                tracing::info!("Chatterbox failed; trying ElevenLabs fallback");
-            }
-            Err(other) => return Err(other),
-        }
-    }
-
-    // 3) Fallback to ElevenLabs
+    // 2) Fallback to ElevenLabs
     try_elevenlabs(&config, &req).await
 }
 
