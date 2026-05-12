@@ -318,6 +318,16 @@ async fn handle_ws_chat(mut socket: WebSocket, state: AppState) {
             }
             StreamItem::ToolProgress { tool, emoji, label } => {
                 let narrated_label = narrate_tool_progress(&tool, &label);
+
+                // Send verbal narration so TTS can speak it aloud
+                let narration = format!("{} ", narrated_label);
+                let tok_msg = serde_json::json!({"t": "tok", "d": narration}).to_string();
+                let _ = socket.send(Message::Text(tok_msg)).await;
+                // Also emit as a sentence for immediate TTS
+                let sent_msg = serde_json::json!({"t": "sent", "d": clean_for_tts(&narration)}).to_string();
+                let _ = socket.send(Message::Text(sent_msg)).await;
+
+                // Visual chip
                 let tool_msg = serde_json::json!({
                     "t": "tool",
                     "tool": tool,
@@ -475,6 +485,16 @@ async fn stream_chat(
                 }
                 StreamItem::ToolProgress { tool, emoji, label } => {
                     let narrated_label = narrate_tool_progress(&tool, &label);
+
+                    // Verbal narration for TTS
+                    let narration = format!("{} ", narrated_label);
+                    yield Ok(Event::default().event("tok").data(narration.clone()));
+                    let clean = clean_for_tts(&narration);
+                    if clean.len() > 1 {
+                        yield Ok(Event::default().event("sent").data(clean));
+                    }
+
+                    // Visual chip
                     yield Ok(Event::default().event("tool").data(
                         serde_json::json!({
                             "tool": tool,
