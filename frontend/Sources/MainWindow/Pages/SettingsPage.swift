@@ -4,6 +4,7 @@ import SwiftUI
 enum SettingsContentView {
     enum SettingsSection: String, CaseIterable {
         case general = "General"
+        case floatingBar = "Floating Bar"
         case shortcuts = "Shortcuts"
         case hermes = "Hermes Agent"
         case byok = "API Keys (BYOK)"
@@ -54,8 +55,10 @@ struct SettingsPage: View {
                     switch selectedSection {
                     case .general:
                         GeneralSettingsSection()
+                    case .floatingBar:
+                        FloatingBarSettingsSection()
                     case .shortcuts:
-                        ShortcutsSettingsSection()
+                        ShortcutsSettingsSection(highlightedSettingId: $highlightedSettingId)
                     case .hermes:
                         HermesSettingsSection()
                     case .byok:
@@ -94,121 +97,123 @@ private struct GeneralSettingsSection: View {
     }
 }
 
-// MARK: - Shortcuts Settings
-private struct ShortcutsSettingsSection: View {
+// MARK: - Floating Bar Settings
+private struct FloatingBarSettingsSection: View {
     @ObservedObject private var settings = ShortcutSettings.shared
-    @State private var isRecording = false
-    @State private var eventMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text("Shortcuts")
+            Text("Floating Bar")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.white)
 
-            // Single hotkey block
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Hotkey de activación")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                    Text("Pulsa el hotkey para abrir el floating bar e iniciar el dictado de voz.")
-                        .font(.system(size: 12))
-                        .foregroundColor(OmiColors.textTertiary)
-                }
-
-                Toggle("Activado", isOn: $settings.askOmiEnabled)
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Voice answers (Push to Talk)", isOn: $settings.floatingBarVoiceAnswersEnabled)
+                    .font(.system(size: 13)).foregroundColor(.white).toggleStyle(.switch)
+                Toggle("Voice answers (typed questions)", isOn: $settings.floatingBarTypedQuestionVoiceAnswersEnabled)
+                    .font(.system(size: 13)).foregroundColor(.white).toggleStyle(.switch)
+                Toggle("Draggable floating bar", isOn: $settings.draggableBarEnabled)
                     .font(.system(size: 13)).foregroundColor(.white).toggleStyle(.switch)
 
-                // Preset chips
-                HStack(spacing: 8) {
-                    ForEach(ShortcutSettings.askOmiPresets, id: \.self) { preset in
-                        HotkeyChip(
-                            label: preset.displayLabel,
-                            isSelected: !isRecording && settings.askOmiShortcut == preset
-                        ) {
-                            stopRecording()
-                            settings.askOmiShortcut = preset
-                        }
-                    }
-                }
+                HStack(spacing: 16) {
+                    Text("Transparent")
+                        .font(.system(size: 13, weight: settings.solidBackground ? .regular : .semibold))
+                        .foregroundColor(settings.solidBackground ? OmiColors.textTertiary : .white)
 
-                // Custom recording row
-                HStack(spacing: 12) {
-                    Button {
-                        isRecording ? stopRecording() : startRecording()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: isRecording ? "record.circle.fill" : "keyboard")
-                                .font(.system(size: 12))
-                            Text(isRecording ? "Presiona la combinación…" : "Shortcut personalizado")
-                                .font(.system(size: 12))
-                        }
-                        .foregroundColor(isRecording ? .red : OmiColors.textTertiary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(isRecording ? Color.red.opacity(0.1) : Color.white.opacity(0.06))
-                        .cornerRadius(7)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7)
-                                .stroke(isRecording ? Color.red.opacity(0.4) : Color.white.opacity(0.1), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    Toggle("", isOn: $settings.solidBackground)
+                        .toggleStyle(.switch)
+                        .tint(OmiColors.purplePrimary)
+                        .labelsHidden()
 
-                    if isRecording {
-                        Text("Esc para cancelar")
-                            .font(.system(size: 11))
-                            .foregroundColor(OmiColors.textQuaternary)
-                    } else if !ShortcutSettings.askOmiPresets.contains(settings.askOmiShortcut) {
-                        HotkeyChip(label: settings.askOmiShortcut.displayLabel, isSelected: true) {}
-                    }
+                    Text("Solid Dark")
+                        .font(.system(size: 13, weight: settings.solidBackground ? .semibold : .regular))
+                        .foregroundColor(settings.solidBackground ? .white : OmiColors.textTertiary)
+
+                    Spacer()
                 }
             }
             .padding(16)
             .background(OmiColors.backgroundSecondary)
             .cornerRadius(10)
 
-            // Misc
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Floating bar arrastrable", isOn: $settings.draggableBarEnabled)
-                    .font(.system(size: 13)).foregroundColor(.white).toggleStyle(.switch)
-                Toggle("Sonidos al activar / detener", isOn: $settings.pttSoundsEnabled)
-                    .font(.system(size: 13)).foregroundColor(.white).toggleStyle(.switch)
-            }
+            // Voice
+            voicePicker
+                .opacity(settings.hasAnyFloatingBarVoiceAnswersEnabled ? 1 : 0.55)
+                .disabled(!settings.hasAnyFloatingBarVoiceAnswersEnabled)
+
+            // Speed
+            voiceSpeedSlider
+                .opacity(settings.hasAnyFloatingBarVoiceAnswersEnabled ? 1 : 0.55)
+                .disabled(!settings.hasAnyFloatingBarVoiceAnswersEnabled)
         }
-        .onDisappear { stopRecording() }
     }
 
-    private func startRecording() {
-        isRecording = true
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
-            if event.keyCode == 53 { // Escape
-                DispatchQueue.main.async { self.stopRecording() }
-                return nil
+    private var voicePicker: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Voice")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(ShortcutSettings.voiceOption(for: settings.selectedVoiceID).description)
+                    .font(.system(size: 13))
+                    .foregroundColor(OmiColors.textTertiary)
             }
-            if let shortcut = ShortcutSettings.KeyboardShortcut.fromRecordingEvent(event, allowModifierOnly: false),
-               shortcut.supportsGlobalHotKey {
-                DispatchQueue.main.async {
-                    self.settings.askOmiShortcut = shortcut
-                    self.stopRecording()
+            Spacer()
+            Picker("", selection: $settings.selectedVoiceID) {
+                Section("Female") {
+                    ForEach(ShortcutSettings.availableVoices.filter { $0.gender == .female }) { voice in
+                        Text(voice.name).tag(voice.id)
+                    }
                 }
-                return nil
+                Section("Male") {
+                    ForEach(ShortcutSettings.availableVoices.filter { $0.gender == .male }) { voice in
+                        Text(voice.name).tag(voice.id)
+                    }
+                }
             }
-            return event
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(width: 180)
         }
+        .padding(16)
+        .background(OmiColors.backgroundSecondary)
+        .cornerRadius(10)
     }
 
-    private func stopRecording() {
-        isRecording = false
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-            eventMonitor = nil
+    private var voiceSpeedSlider: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Voice speed")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Text(ShortcutSettings.voiceSpeedLabel(for: settings.voicePlaybackSpeed))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(OmiColors.textTertiary)
+            }
+
+            HStack(spacing: 12) {
+                Text("0.8×")
+                    .font(.system(size: 11))
+                    .foregroundColor(OmiColors.textTertiary)
+                Slider(
+                    value: $settings.voicePlaybackSpeed,
+                    in: 0.8...2.0,
+                    step: 0.2
+                )
+                .tint(OmiColors.purplePrimary)
+                Text("2.0×")
+                    .font(.system(size: 11))
+                    .foregroundColor(OmiColors.textTertiary)
+            }
         }
+        .padding(16)
+        .background(OmiColors.backgroundSecondary)
+        .cornerRadius(10)
     }
 }
 
-private struct HotkeyChip: View {
+struct HotkeyChip: View {
     let label: String
     let isSelected: Bool
     let action: () -> Void

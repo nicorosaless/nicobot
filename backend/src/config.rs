@@ -82,6 +82,8 @@ pub struct Config {
     pub chatterbox_tts_url: Option<String>,
     /// Chatterbox default voice reference ID
     pub chatterbox_default_voice_id: String,
+    /// Kokoro TTS sidecar URL (fast local fallback)
+    pub kokoro_tts_url: Option<String>,
     /// SQLite database path
     pub db_path: String,
     /// System prompt injected into chat requests.
@@ -127,6 +129,7 @@ impl Config {
             tts_api_key: env::var("TTS_API_KEY").ok(),
             chatterbox_tts_url: env::var("CHATTERBOX_TTS_URL").ok(),
             chatterbox_default_voice_id: env::var("CHATTERBOX_DEFAULT_VOICE_ID").unwrap_or_else(|_| "cristina".to_string()),
+            kokoro_tts_url: env::var("KOKORO_TTS_URL").ok(),
             db_path: env::var("DB_PATH").unwrap_or_else(|_| "/tmp/umi.db".to_string()),
             system_prompt: env::var("HERMES_SYSTEM_PROMPT")
                 .ok()

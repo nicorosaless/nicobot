@@ -5,10 +5,14 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_PID=""
 HERMES_PID=""
 CHATTERBOX_PID=""
+KOKORO_PID=""
 
 cleanup() {
   if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
     kill "$BACKEND_PID" 2>/dev/null || true
+  fi
+  if [ -n "$KOKORO_PID" ] && kill -0 "$KOKORO_PID" 2>/dev/null; then
+    kill "$KOKORO_PID" 2>/dev/null || true
   fi
   if [ -n "$CHATTERBOX_PID" ] && kill -0 "$CHATTERBOX_PID" 2>/dev/null; then
     kill "$CHATTERBOX_PID" 2>/dev/null || true
@@ -46,6 +50,7 @@ fi
 BACKEND_PORT="${PORT:-10201}"
 HERMES_PORT="${HERMES_PORT:-8642}"
 CHATTERBOX_PORT="${CHATTERBOX_PORT:-10202}"
+KOKORO_PORT="${KOKORO_PORT:-10203}"
 APP_NAME="${UMI_APP_NAME:-Umi Dev}"
 APP_BUNDLE="$ROOT_DIR/build/$APP_NAME.app"
 HERMES_API_URL="${HERMES_API_URL:-https://api.fireworks.ai/inference/v1}"
@@ -127,6 +132,15 @@ log "Starting Chatterbox TTS sidecar"
 CHATTERBOX_PID=$!
 wait_for_health "Chatterbox TTS" "http://127.0.0.1:$CHATTERBOX_PORT/health" 20 || true
 
+# ── Kokoro TTS sidecar ─────────────────────────────────────────────────────
+export KOKORO_PORT="${KOKORO_PORT:-10203}"
+export KOKORO_HOST="127.0.0.1"
+
+log "Starting Kokoro TTS sidecar"
+"$ROOT_DIR/.venv-tts/bin/python" "$ROOT_DIR/services/kokoro_tts/main.py" &
+KOKORO_PID=$!
+wait_for_health "Kokoro TTS" "http://127.0.0.1:$KOKORO_PORT/health" 20 || true
+
 # ── Hermes Agent ─────────────────────────────────────────────────────────────
 log "Starting Hermes Agent"
 "$ROOT_DIR/.venv/bin/hermes" gateway run --replace &
@@ -169,5 +183,6 @@ open "$APP_BUNDLE"
 log "Services running"
 printf 'Hermes Agent:   http://127.0.0.1:%s (PID %s)\n' "$HERMES_PORT" "$HERMES_PID"
 printf 'Chatterbox TTS: http://127.0.0.1:%s (PID %s)\n' "$CHATTERBOX_PORT" "$CHATTERBOX_PID"
+printf 'Kokoro TTS:     http://127.0.0.1:%s (PID %s)\n' "$KOKORO_PORT" "$KOKORO_PID"
 printf 'Umi backend:    http://127.0.0.1:%s (PID %s)\n' "$BACKEND_PORT" "$BACKEND_PID"
 wait "$BACKEND_PID"
