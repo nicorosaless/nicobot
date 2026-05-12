@@ -25,33 +25,40 @@ struct VisualEffectView: NSViewRepresentable {
 /// Background modifier using NSVisualEffectView with dark blur or solid background.
 struct FloatingBackgroundModifier: ViewModifier {
     let cornerRadius: CGFloat
+    let visible: Bool
     @ObservedObject private var settings = ShortcutSettings.shared
 
     func body(content: Content) -> some View {
         content
             .background(
                 Group {
-                    if settings.solidBackground {
-                        Color(nsColor: NSColor(white: 0.12, alpha: 1.0))
-                    } else {
-                        ZStack {
-                            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow, alphaValue: 0.95)
-                            Color.black.opacity(0.18)
+                    if visible {
+                        if settings.solidBackground {
+                            Color(nsColor: NSColor(white: 0.12, alpha: 1.0))
+                        } else {
+                            ZStack {
+                                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow, alphaValue: 0.92)
+                                Color.black.opacity(0.10)
+                            }
                         }
                     }
                 }
             )
-            .clipShape(.rect(cornerRadius: cornerRadius))
+            .clipShape(.rect(cornerRadius: visible ? cornerRadius : 0))
             .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(Color.black.opacity(0.5), lineWidth: 1)
+                Group {
+                    if visible {
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                    }
+                }
             )
     }
 }
 
 extension View {
-    func floatingBackground(cornerRadius: CGFloat = 20) -> some View {
-        modifier(FloatingBackgroundModifier(cornerRadius: cornerRadius))
+    func floatingBackground(cornerRadius: CGFloat = 20, visible: Bool = true) -> some View {
+        modifier(FloatingBackgroundModifier(cornerRadius: cornerRadius, visible: visible))
     }
 }
 

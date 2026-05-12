@@ -45,12 +45,12 @@ struct AIResponseView: View {
                                     case .text(_, let text), .thinking(_, let text):
                                         Text(text)
                                             .scaledFont(size: 13)
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(textMid)
                                     case .discoveryCard(_, let title, let subtitle, let body):
                                         VStack(alignment: .leading, spacing: 3) {
-                                            Text(title).scaledFont(size: 13, weight: .semibold)
-                                            Text(subtitle).scaledFont(size: 12).foregroundColor(.secondary)
-                                            Text(body).scaledFont(size: 12).foregroundColor(.secondary)
+                                            Text(title).scaledFont(size: 13, weight: .semibold).foregroundColor(textDark)
+                                            Text(subtitle).scaledFont(size: 12).foregroundColor(textLight)
+                                            Text(body).scaledFont(size: 12).foregroundColor(textMid)
                                         }
                                     }
                                 }
@@ -63,10 +63,10 @@ struct AIResponseView: View {
                             }
                         } else if isLoading {
                             HStack(spacing: 8) {
-                                ProgressView().scaleEffect(0.7)
+                                ProgressView().scaleEffect(0.7).tint(textLight)
                                 Text("Thinking…")
                                     .scaledFont(size: 13)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(textLight)
                             }
                         } else if let msg = currentMessage, !msg.text.isEmpty {
                             Markdown(msg.text)
@@ -124,23 +124,27 @@ struct AIResponseView: View {
         }
     }
 
+    private let textDark = Color(hex: 0x1F2937)
+    private let textMid = Color(hex: 0x374151)
+    private let textLight = Color(hex: 0x6B7280)
+
     private var headerView: some View {
         HStack(spacing: 12) {
             if isLoading {
-                ProgressView().scaleEffect(0.6).frame(width: 16, height: 16)
-                Text("thinking").scaledFont(size: 14).foregroundColor(.secondary)
+                ProgressView().scaleEffect(0.6).frame(width: 16, height: 16).tint(textLight)
+                Text("thinking").scaledFont(size: 14).foregroundColor(textLight)
             } else {
-                Text("umi says").scaledFont(size: 14).foregroundColor(.secondary)
+                Text("umi says").scaledFont(size: 14).foregroundColor(textLight)
             }
             Spacer()
             if canClearVisibleConversation {
                 HStack(spacing: 4) {
                     Text("esc")
-                        .scaledFont(size: 11).foregroundColor(.secondary)
+                        .scaledFont(size: 11).foregroundColor(textLight)
                         .frame(width: 30, height: 16)
-                        .background(Color.white.opacity(0.1))
+                        .background(Color.black.opacity(0.06))
                         .cornerRadius(4)
-                    Text("to clear").scaledFont(size: 11).foregroundColor(.secondary)
+                    Text("to clear").scaledFont(size: 11).foregroundColor(textLight)
                 }
             }
         }
@@ -149,13 +153,14 @@ struct AIResponseView: View {
     private var questionBar: some View {
         Text(userInput)
             .scaledFont(size: 13)
-            .foregroundColor(.white)
+            .foregroundColor(textDark)
             .lineLimit(2)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.1))
+            .background(Color.black.opacity(0.04))
             .cornerRadius(8)
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.black.opacity(0.1), lineWidth: 0.5))
     }
 
     private var voiceFollowUpView: some View {
@@ -164,7 +169,7 @@ struct AIResponseView: View {
                 .scaleEffect(isVoiceFollowUp ? 1.2 : 1.0)
                 .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: isVoiceFollowUp)
             Text(voiceFollowUpTranscript.isEmpty ? "Listening…" : voiceFollowUpTranscript)
-                .scaledFont(size: 13).foregroundColor(.white.opacity(0.8))
+                .scaledFont(size: 13).foregroundColor(textMid)
                 .lineLimit(1)
         }
         .id("voiceFollowUp")
@@ -175,7 +180,7 @@ struct AIResponseView: View {
             TextField("Follow-up…", text: $followUpText)
                 .textFieldStyle(.plain)
                 .scaledFont(size: 13)
-                .foregroundColor(.white)
+                .foregroundColor(textDark)
                 .focused($isFollowUpFocused)
                 .onSubmit { submitFollowUp() }
 
@@ -190,20 +195,22 @@ struct AIResponseView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.08))
+        .background(Color.black.opacity(0.04))
         .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5))
     }
 
     private func historyExchangeView(_ exchange: FloatingChatExchange) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let q = exchange.question, !q.isEmpty {
                 Text(q)
-                    .scaledFont(size: 13).foregroundColor(.white)
+                    .scaledFont(size: 13).foregroundColor(textDark)
                     .lineLimit(2)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white.opacity(0.1))
+                    .background(Color.black.opacity(0.04))
                     .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.black.opacity(0.1), lineWidth: 0.5))
             }
             Markdown(exchange.aiMessage.text)
                 .markdownTheme(.gitHub)

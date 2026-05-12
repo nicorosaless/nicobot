@@ -16,6 +16,7 @@ struct FloatingControlBarView: View {
     var onShareLink: (() async -> String?)?
 
     @State private var isHovering = false
+    @State private var respondingStartTime: Date? = nil
     private let conversationTransition = Animation.spring(response: 0.32, dampingFraction: 0.86)
 
     var body: some View {
@@ -35,7 +36,7 @@ struct FloatingControlBarView: View {
 
     /// Whether the bar chrome should stretch to fill the window width
     private var barNeedsFullWidth: Bool {
-        isHovering || state.showingAIConversation || state.isVoiceListening
+        isHovering || state.activeBarMode != .idle
     }
 
     private var barChrome: some View {
@@ -43,47 +44,30 @@ struct FloatingControlBarView: View {
             // Main control bar - always visible
             controlBarView
 
-            // AI conversation view - conditionally visible
-            if state.showingAIConversation {
+            // Transcript panel — white frosted glass
+            if state.isTranscriptExpanded && state.showingAIConversation {
                 conversationView
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(Color.black.opacity(0.5), lineWidth: 1)
-                )
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.white)
+                            .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5)
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .frame(maxWidth: barNeedsFullWidth ? .infinity : nil, alignment: .top)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: state.showingAIConversation)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: state.isTranscriptExpanded)
         .animation(conversationTransition, value: state.showingAIResponse)
-        .overlay(alignment: .topLeading) {
-            if state.showingAIConversation {
-                Button {
-                    onCloseAI()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5)
-                            .frame(width: 16, height: 16)
-
-                        Image(systemName: "xmark")
-                            .font(.system(size: 8))
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(width: 20, height: 20)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
-                .padding(2)
-                .transition(.opacity)
-            }
-        }
+        // No close button — ESC returns to idle
         .overlay(alignment: .topTrailing) {
-            if isHovering && !state.isVoiceListening {
+            if isHovering && state.activeBarMode == .idle {
                 Button {
                     openFloatingBarSettings()
                 } label: {
@@ -100,7 +84,7 @@ struct FloatingControlBarView: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if state.showingAIConversation {
+            if state.isTranscriptExpanded {
                 ZStack {
                     ResizeHandleView(targetWindow: window)
                         .frame(width: 20, height: 20)
@@ -114,11 +98,16 @@ struct FloatingControlBarView: View {
         }
         .clipped()
         .background(DraggableAreaView(targetWindow: window))
-        .floatingBackground(cornerRadius: barNeedsFullWidth ? 20 : 5)
+        .floatingBackground(cornerRadius: 20, visible: barNeedsFullWidth)
         .contextMenu {
             barContextMenu
         }
         .onHover(perform: handleBarHover)
+        .onChange(of: state.activeBarMode) { _, newMode in
+            if newMode == .responding {
+                respondingStartTime = Date()
+            }
+        }
     }
 
     @ViewBuilder
@@ -231,12 +220,8 @@ struct FloatingControlBarView: View {
 
     private var controlBarView: some View {
         Group {
-            if state.isVoiceListening && !state.isVoiceFollowUp {
-                voiceListeningView
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .frame(height: 50)
-                    .transition(.opacity)
+            if state.activeBarMode != .idle {
+                activeBarContent(mode: state.activeBarMode)
             } else if isHovering || state.showingAIConversation {
                 HStack(spacing: 6) {
                     compactLabel("Push to talk", keys: shortcutSettings.pttShortcut.displayTokens)
@@ -252,10 +237,39 @@ struct FloatingControlBarView: View {
         }
     }
 
-    /// Minimal thin bar shown when not hovering
+    @ViewBuilder
+    private func activeBarContent(mode: ActiveBarMode) -> some View {
+        VoiceWaveformView(mode: mode, micLevel: state.micLevel, speakingLevel: state.speakingLevel, isLocked: state.isVoiceLocked, respondingStartTime: respondingStartTime)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .frame(height: 50)
+            .overlay(alignment: .bottom) {
+                if isHovering || state.isTranscriptExpanded {
+                    expandChevron
+                        .animation(.easeInOut(duration: 0.15), value: isHovering)
+                }
+            }
+            .transition(.opacity)
+    }
+
+    private var expandChevron: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                state.isTranscriptExpanded.toggle()
+            }
+        } label: {
+            Image(systemName: state.isTranscriptExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 8, weight: .light))
+                .foregroundColor(.white.opacity(0.45))
+                .padding(.bottom, 2)
+        }
+        .buttonStyle(.plain)
+        .transition(.opacity)
+    }
+
+    /// Invisible hit-target when idle — no visual indicator
     private var compactCircleView: some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(Color.white.opacity(0.5))
+        Color.clear
             .frame(width: 28, height: 6)
     }
 
@@ -302,10 +316,6 @@ struct FloatingControlBarView: View {
                     .cornerRadius(3)
             }
         }
-    }
-
-    private var voiceListeningView: some View {
-        VoiceWaveformView(micLevel: state.micLevel, isLocked: state.isVoiceLocked)
     }
 
     private var aiInputView: some View {

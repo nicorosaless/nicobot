@@ -236,10 +236,13 @@ class PushToTalkManager: ObservableObject {
             guard self.state == .finalizing else { return }
             self.state = .idle
             self.updateBarState(skipResize: wasFollowUp)
-            if !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
                 log("PushToTalkManager: sending transcript '\(transcript)'")
                 FloatingControlBarManager.shared.openAIInputWithQuery(transcript, fromVoice: true)
             } else {
+                // No speech detected — collapse the bar back to pill
+                FloatingControlBarManager.shared.resizeForPTT(expanded: false)
                 FloatingControlBarManager.shared.openAIInput()
             }
         }
@@ -284,7 +287,9 @@ class PushToTalkManager: ObservableObject {
         guard !skipResize && !barState.isVoiceFollowUp && !barState.showingAIConversation && !isOnboarding else { return }
         if barState.isVoiceListening && !wasListening {
             FloatingControlBarManager.shared.resizeForPTT(expanded: true)
-        } else if !barState.isVoiceListening && wasListening {
+        } else if !barState.isVoiceListening && wasListening && state != .finalizing {
+            // Skip collapse during finalizing — prepareVisibleQueryState will handle the resize.
+            // If finalization yields an empty transcript, finalize() collapses explicitly.
             FloatingControlBarManager.shared.resizeForPTT(expanded: false)
         }
     }

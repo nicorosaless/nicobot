@@ -74,7 +74,7 @@ class ChatProvider: ObservableObject {
     var isSending: Bool { isLoading }
     var modelOverride: String? = nil
     var workingDirectory: String? = nil
-    static var floatingBarSystemPromptPrefix: String { "" }
+    static var floatingBarSystemPromptPrefix: String { "Never use emojis in your responses. Your answers will be read aloud via text-to-speech, so write in plain natural language only." }
 
     private let baseURL = "http://127.0.0.1:10201"
 

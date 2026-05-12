@@ -1,6 +1,16 @@
 import Combine
 import SwiftUI
 
+/// Visual mode for the animated floating bar.
+enum ActiveBarMode: Hashable {
+    case idle
+    case listening    // PTT recording mic input
+    case processing   // waiting for AI (isAILoading)
+    case responding   // AI streaming text (TTS not yet playing)
+    case speaking     // TTS audio actively playing
+    case done         // AI response complete, conversation still open
+}
+
 /// A single question/answer exchange in the floating bar chat history.
 struct FloatingChatExchange: Identifiable {
     let id = UUID()
@@ -93,6 +103,8 @@ class FloatingControlBarState: NSObject, ObservableObject {
     @Published var isVoiceLocked: Bool = false
     @Published var voiceTranscript: String = ""
     @Published var micLevel: Float = 0.0  // 0.0–1.0 for waveform animation
+    @Published var isSpeaking: Bool = false
+    @Published var speakingLevel: Float = 0.0  // 0.0–1.0 from TTS playback metering
 
     // Voice follow-up state (PTT while AI conversation is active)
     @Published var isVoiceFollowUp: Bool = false
@@ -104,6 +116,18 @@ class FloatingControlBarState: NSObject, ObservableObject {
 
     @Published var selectedModel: String = ModelQoS.Claude.defaultSelection
     static var availableModels: [(id: String, label: String)] { ModelQoS.Claude.availableModels }
+
+    /// Whether the expandable transcript panel is visible below the bar.
+    @Published var isTranscriptExpanded: Bool = false
+
+    var activeBarMode: ActiveBarMode {
+        if isVoiceListening { return .listening }
+        if isAILoading { return .processing }
+        if isSpeaking { return .speaking }
+        if let msg = currentAIMessage, msg.isStreaming { return .responding }
+        if showingAIConversation && currentAIMessage != nil { return .done }
+        return .idle
+    }
 
     var isShowingNotification: Bool {
         currentNotification != nil
@@ -123,6 +147,7 @@ class FloatingControlBarState: NSObject, ObservableObject {
     }
 
     func clearVisibleConversation() {
+        isTranscriptExpanded = false
         aiInputText = ""
         displayedQuery = ""
         currentAIMessage = nil
@@ -133,6 +158,8 @@ class FloatingControlBarState: NSObject, ObservableObject {
         isVoiceFollowUp = false
         voiceFollowUpTranscript = ""
         currentQueryFromVoice = false
+        isSpeaking = false
+        speakingLevel = 0.0
         lastConversationActivityAt = nil
     }
 }

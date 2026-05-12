@@ -41,7 +41,10 @@ class FloatingControlBarWindow: NSPanel, NSWindowDelegate {
     private var suppressHoverResize = false
     private var inputHeightCancellable: AnyCancellable?
     private var responseHeightCancellable: AnyCancellable?
+    private var transcriptExpandCancellable: AnyCancellable?
     private var resizeWorkItem: DispatchWorkItem?
+    /// Prevents the transcriptExpand observer from firing a resize during closeAIConversation.
+    private var isClosingConversation = false
     /// Saved center point from before chat opened, used to restore position on close.
     private var preChatCenter: NSPoint?
     /// Token incremented each time a windowDidResignKey dismiss animation starts.
@@ -86,19 +89,8 @@ class FloatingControlBarWindow: NSPanel, NSWindowDelegate {
 
         setupViews()
 
-        if ShortcutSettings.shared.draggableBarEnabled,
-           let savedPosition = UserDefaults.standard.string(forKey: FloatingControlBarWindow.positionKey) {
-            let origin = NSPointFromString(savedPosition)
-            // Verify saved position is on a visible screen
-            let onScreen = NSScreen.screens.contains { $0.visibleFrame.contains(NSPoint(x: origin.x + 14, y: origin.y + 14)) }
-            if onScreen {
-                self.setFrameOrigin(origin)
-            } else {
-                centerOnMainScreen()
-            }
-        } else {
-            centerOnMainScreen()
-        }
+        // Always start at top-center of the screen
+        centerOnMainScreen()
     }
 
     override var canBecomeKey: Bool { true }
@@ -113,16 +105,11 @@ class FloatingControlBarWindow: NSPanel, NSWindowDelegate {
     }
 
     func handleEscapeKey() {
-        if FloatingBarVoicePlaybackService.shared.isSpeaking {
-            FloatingBarVoicePlaybackService.shared.interruptCurrentResponse()
-            return
+        FloatingBarVoicePlaybackService.shared.interruptCurrentResponse()
+        if state.isVoiceListening {
+            PushToTalkManager.shared.cancelListening()
         }
-
-        guard state.showingAIConversation else { return }
-
-        if state.hasVisibleConversation {
-            clearVisibleConversationFromUI()
-        } else {
+        if state.showingAIConversation {
             closeAIConversation()
         }
     }
@@ -203,6 +190,24 @@ class FloatingControlBarWindow: NSPanel, NSWindowDelegate {
 
         // Follow cursor across monitors — poll mouse position to move bar instantly
         startCursorScreenTracking()
+
+        // Expand/collapse window when user toggles the transcript arrow
+        setupTranscriptExpandObserver()
+    }
+
+    private func setupTranscriptExpandObserver() {
+        transcriptExpandCancellable = state.$isTranscriptExpanded
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] expanded in
+                guard let self, !self.isClosingConversation, self.state.showingAIConversation else { return }
+                if expanded {
+                    self.resizeToResponseHeight(animated: true)
+                } else {
+                    let barSize = NSSize(width: Self.expandedWidth, height: Self.expandedBarSize.height)
+                    self.resizeAnchored(to: barSize, makeResizable: false, animated: true, anchorTop: true)
+                }
+            }
     }
 
     private var cursorTrackingTimer: DispatchSourceTimer?
@@ -292,6 +297,9 @@ class FloatingControlBarWindow: NSPanel, NSWindowDelegate {
     func closeAIConversation() {
         AnalyticsManager.shared.floatingBarAskOmiClosed()
 
+        // Prevent the transcriptExpand observer from interfering with the close animation
+        isClosingConversation = true
+
         // Cancel any in-flight chat streaming to prevent re-expansion
         FloatingControlBarManager.shared.cancelChat()
 
@@ -306,6 +314,7 @@ class FloatingControlBarWindow: NSPanel, NSWindowDelegate {
         }
 
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            state.isTranscriptExpanded = false
             state.showingAIConversation = false
             state.showingAIResponse = false
             state.aiInputText = ""
@@ -354,6 +363,7 @@ class FloatingControlBarWindow: NSPanel, NSWindowDelegate {
             guard let self = self else { return }
             self.isResizingProgrammatically = false
             self.pendingRestoreOrigin = nil
+            self.isClosingConversation = false
             // Safety net: only snap if no new AI session was opened while the animation ran.
             // Without this guard, a rapid PTT query that fires within 0.35s gets collapsed
             // back to the pill position by this stale completion block.
@@ -763,19 +773,17 @@ class FloatingControlBarWindow: NSPanel, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {
-        guard state.showingAIConversation else { return }
+        // Only dismiss when the transcript panel is visibly open (clicking away from a visible panel).
+        // If the bar is just animating in the background (transcript collapsed), don't interrupt.
+        guard state.isTranscriptExpanded else { return }
 
         // Only dismiss when the user physically clicks away.
-        // Programmatic focus changes — e.g. the AI agent activating a browser
-        // window for automation — do NOT produce a mouse-down event, so we
-        // leave the conversation open in those cases.
         let eventType = NSApp.currentEvent?.type
         let isMouseClick = eventType == .leftMouseDown
             || eventType == .rightMouseDown
             || eventType == .otherMouseDown
         guard isMouseClick else { return }
 
-        // Close in-place so the bar collapses smoothly instead of blinking out and back in.
         resignKeyAnimationToken += 1
         closeAIConversation()
     }
@@ -1057,6 +1065,7 @@ class FloatingControlBarManager {
         self.window = barWindow
 
         PushToTalkManager.shared.setup(barState: barWindow.state)
+        FloatingBarVoicePlaybackService.shared.configure(barState: barWindow.state)
 
         // Re-apply any in-flight snooze that survived app relaunch.
         if isSnoozed {
@@ -1435,6 +1444,8 @@ class FloatingControlBarManager {
         }
         window.state.currentAIMessage = notificationMessage
         window.state.markConversationActivity()
+        // Auto-expand transcript for notification conversations (user tapped the notification card)
+        window.state.isTranscriptExpanded = true
         window.resizeToResponseHeightPublic(animated: true)
         window.orderFrontRegardless()
         window.focusInputField()
@@ -1520,7 +1531,10 @@ class FloatingControlBarManager {
         barWindow.state.isVoiceFollowUp = false
         barWindow.state.voiceFollowUpTranscript = ""
         barWindow.state.responseContentHeight = 0
-        barWindow.resizeToResponseHeightPublic(animated: true)
+        // Keep window at bar size unless transcript is already expanded (follow-up case)
+        if !barWindow.state.isTranscriptExpanded {
+            barWindow.resizeForPTTState(expanded: true)
+        }
     }
 
     private func isActiveQueryGeneration(_ generation: Int) -> Bool {
@@ -1607,7 +1621,7 @@ class FloatingControlBarManager {
                                 barWindow.state.showingAIResponse = true
                             }
                         }
-                        barWindow.resizeToResponseHeightPublic(animated: true)
+                        // Window stays at bar size — expands only when user opens transcript
                     }
                 } else {
                     barWindow?.state.isAILoading = false
@@ -1663,13 +1677,11 @@ class FloatingControlBarManager {
             barWindow.state.currentAIMessage = ChatMessage(text: "Failed to get a response. Please try again.", sender: .ai)
         }
 
-        // Ensure the response view is visible and resized (handles the case where
-        // the sink never fired because no streaming data arrived before the error)
+        // Ensure the response view is logically visible (no resize — transcript expands on demand)
         if !barWindow.state.showingAIResponse {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 barWindow.state.showingAIResponse = true
             }
-            barWindow.resizeToResponseHeightPublic(animated: true)
         }
 
         if shouldPlayVoice {
