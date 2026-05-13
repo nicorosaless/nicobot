@@ -124,7 +124,8 @@ wait_for_health "Kokoro TTS" "http://127.0.0.1:$KOKORO_PORT/health" 20 || true
 
 # ── Hermes Agent ─────────────────────────────────────────────────────────────
 log "Starting Hermes Agent"
-"$ROOT_DIR/.venv/bin/hermes" gateway run --replace &
+# Override Discord/Telegram tokens with empty strings so Hermes .env doesn't trigger auto-connect
+DISCORD_BOT_TOKEN="" TELEGRAM_BOT_TOKEN="" "$ROOT_DIR/.venv/bin/hermes" gateway run --replace &
 HERMES_PID=$!
 wait_for_health "Hermes Agent" "http://127.0.0.1:$HERMES_PORT/health" 15
 
