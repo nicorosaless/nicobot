@@ -198,7 +198,10 @@ impl Config {
                 self.hermes_api_url = base_url;
             }
             if let Some(model_name) = model.default_model.filter(|value| !value.trim().is_empty()) {
-                self.hermes_model = model_name;
+                // Env var takes priority — only apply YAML default when HERMES_MODEL isn't set
+                if env::var("HERMES_MODEL").is_err() {
+                    self.hermes_model = model_name;
+                }
             }
         }
 
@@ -331,7 +334,7 @@ pub fn render_hermes_config(config: &Config) -> String {
     };
 
     format!(
-        "model:\n  provider: \"custom\"\n  api_key: {}\n  base_url: {}\n  default: {}\nagent:\n  reasoning_effort: {}\n  max_turns: {}\n  system_prompt: {}\n{generation_section}{toolsets_section}platforms:\n  api_server:\n    enabled: true\n    extra:\n      port: {}\n      host: \"127.0.0.1\"\n",
+        "model:\n  provider: \"custom\"\n  api_key: {}\n  base_url: {}\n  default: {}\nagent:\n  reasoning_effort: {}\n  max_turns: {}\n  system_prompt: {}\n{generation_section}{toolsets_section}platforms:\n  api_server:\n    enabled: true\n    extra:\n      port: {}\n      host: \"127.0.0.1\"\n  discord:\n    enabled: false\n  telegram:\n    enabled: false\n  slack:\n    enabled: false\n  whatsapp:\n    enabled: false\n",
         yaml_quote(config.hermes_api_key.as_deref().unwrap_or_default()),
         yaml_quote(&config.hermes_api_url),
         yaml_quote(&config.hermes_model),

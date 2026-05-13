@@ -4,8 +4,15 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use std::sync::LazyLock;
+use std::time::Duration;
 
-static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(300))
+        .build()
+        .expect("failed to build HTTP client")
+});
 
 #[derive(Serialize)]
 struct ChatRequest {
@@ -67,6 +74,8 @@ pub enum StreamItem {
         tool: String,
         emoji: String,
         label: String,
+        /// None = original format (narrate); Some("started") = narrate; Some("completed") = chip only
+        status: Option<String>,
     },
 }
 
@@ -77,6 +86,7 @@ enum ChatCompletionSseItem {
         tool: String,
         emoji: String,
         label: String,
+        status: Option<String>,
     },
     Done,
 }
@@ -84,8 +94,29 @@ enum ChatCompletionSseItem {
 #[derive(Deserialize)]
 struct ToolProgressPayload {
     tool: String,
+    #[serde(default)]
     emoji: String,
+    #[serde(default)]
     label: String,
+    #[serde(default)]
+    status: Option<String>,
+    // Hermes sends toolCallId; we don't use it but need to accept it
+    #[serde(rename = "toolCallId", default)]
+    _tool_call_id: Option<String>,
+}
+
+fn default_tool_emoji(tool: &str) -> &'static str {
+    match tool {
+        t if t.contains("browser") || t.contains("navigate") || t.contains("click") => "🌐",
+        t if t.contains("terminal") || t.contains("bash") || t.contains("shell") || t.contains("process") => "💻",
+        t if t.contains("search") || t.contains("web") => "🔍",
+        t if t.contains("write") || t.contains("patch") => "✏️",
+        t if t.contains("read") || t.contains("file") => "📄",
+        t if t.contains("memory") => "🧠",
+        t if t.contains("image") => "🖼️",
+        t if t.contains("code") => "⚙️",
+        _ => "🔧",
+    }
 }
 
 #[derive(Default)]
@@ -418,8 +449,8 @@ async fn open_chat_stream(
             for parsed in parser.push_bytes(&bytes) {
                 match parsed {
                     Ok(ChatCompletionSseItem::Token(content)) => yield StreamItem::Token(content),
-                    Ok(ChatCompletionSseItem::ToolProgress { tool, emoji, label }) => {
-                        yield StreamItem::ToolProgress { tool, emoji, label };
+                    Ok(ChatCompletionSseItem::ToolProgress { tool, emoji, label, status }) => {
+                        yield StreamItem::ToolProgress { tool, emoji, label, status };
                     }
                     Ok(ChatCompletionSseItem::Done) => return,
                     Err(e) => tracing::warn!("Ignoring malformed chat completion SSE event: {}", e),
@@ -488,11 +519,24 @@ fn parse_chat_completion_sse_event(raw_event: &[u8]) -> Vec<Result<ChatCompletio
             return Vec::new();
         }
         return match serde_json::from_str::<ToolProgressPayload>(&data) {
-            Ok(payload) => vec![Ok(ChatCompletionSseItem::ToolProgress {
-                tool: payload.tool,
-                emoji: payload.emoji,
-                label: payload.label,
-            })],
+            Ok(payload) => {
+                let emoji = if payload.emoji.is_empty() {
+                    default_tool_emoji(&payload.tool).to_string()
+                } else {
+                    payload.emoji
+                };
+                let label = if payload.label.is_empty() {
+                    payload.tool.clone()
+                } else {
+                    payload.label
+                };
+                vec![Ok(ChatCompletionSseItem::ToolProgress {
+                    tool: payload.tool,
+                    emoji,
+                    label,
+                    status: payload.status,
+                })]
+            }
             Err(e) => vec![Err(format!("{} while parsing {}", e, data))],
         };
     }
@@ -548,6 +592,21 @@ pub fn greeting() -> String {
     "¡Hola! Soy Umi. ¿En qué puedo ayudarte?".to_string()
 }
 
+/// Past-tense narration for tool completion events.
+pub fn narrate_tool_completion(tool: &str) -> String {
+    match tool {
+        t if t.contains("browser_navigate") || t == "navigate" => "He navegado a la web.".to_string(),
+        t if t.contains("browser") || t.contains("click") || t.contains("type") => "He terminado con el navegador.".to_string(),
+        t if t.contains("terminal") || t.contains("bash") || t.contains("shell") || t.contains("process") => "Comando ejecutado.".to_string(),
+        t if t.contains("search") || t.contains("web") => "Búsqueda completada.".to_string(),
+        t if t.contains("write") && t.contains("file") => "Archivo guardado.".to_string(),
+        t if t.contains("read") && t.contains("file") || t.contains("file") => "Archivo leído.".to_string(),
+        t if t.contains("memory") => "Memoria actualizada.".to_string(),
+        t if t.contains("code") => "Código ejecutado.".to_string(),
+        _ => "Listo.".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -592,7 +651,25 @@ mod tests {
             vec![Ok(ChatCompletionSseItem::ToolProgress {
                 tool: "terminal".to_string(),
                 emoji: "💻".to_string(),
-                label: "ls".to_string()
+                label: "ls".to_string(),
+                status: None,
+            })]
+        );
+    }
+
+    #[test]
+    fn parses_hermes_tool_progress_without_emoji_label() {
+        let items = parse_all(&[
+            b"event: hermes.tool.progress\ndata: {\"tool\":\"browser_navigate\",\"toolCallId\":\"call_abc\",\"status\":\"completed\"}\n\n",
+        ]);
+
+        assert_eq!(
+            items,
+            vec![Ok(ChatCompletionSseItem::ToolProgress {
+                tool: "browser_navigate".to_string(),
+                emoji: "🌐".to_string(),
+                label: "browser_navigate".to_string(),
+                status: Some("completed".to_string()),
             })]
         );
     }

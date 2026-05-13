@@ -14,9 +14,11 @@ use axum::{
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, pin::Pin, sync::Arc};
+use std::time::Duration;
+use tokio::time::timeout as tokio_timeout;
 
 use crate::config::persist_hermes_config;
-use crate::hermes::StreamItem;
+use crate::hermes::{narrate_tool_completion, StreamItem};
 use crate::AppState;
 
 const PROFILE_BLOCK_START: &str = "\n\n<!-- umi-persistent-profile:start -->\n";
@@ -218,6 +220,8 @@ async fn handle_ws_chat(mut socket: WebSocket, state: AppState) {
         },
     };
 
+    tracing::info!("→ {}", req.text);
+
     // 3. Save user message
     if state
         .db
@@ -286,8 +290,26 @@ async fn handle_ws_chat(mut socket: WebSocket, state: AppState) {
 
     let mut full_response = String::new();
     let mut sentence_buf = String::new();
+    let mut silence_narrated = false;
 
-    while let Some(item) = token_stream.next().await {
+    loop {
+        let item = match tokio_timeout(Duration::from_secs(2), token_stream.next()).await {
+            Ok(Some(item)) => {
+                silence_narrated = false;
+                item
+            }
+            Ok(None) => break,
+            Err(_) => {
+                // Stream silent for 2s — probably executing a tool
+                if !silence_narrated {
+                    silence_narrated = true;
+                    let narrate_msg = serde_json::json!({"t": "narrate", "d": "Un momento, procesando."}).to_string();
+                    let _ = socket.send(Message::Text(narrate_msg)).await;
+                }
+                continue;
+            }
+        };
+
         match item {
             StreamItem::Token(token) => {
                 full_response.push_str(&token);
@@ -316,23 +338,24 @@ async fn handle_ws_chat(mut socket: WebSocket, state: AppState) {
                     }
                 }
             }
-            StreamItem::ToolProgress { tool, emoji, label } => {
-                let narrated_label = narrate_tool_progress(&tool, &label);
+            StreamItem::ToolProgress { tool, emoji, label, status } => {
+                let is_completed = status.as_deref() == Some("completed");
+                let narration = if is_completed {
+                    tracing::info!("⚙ {} completado", tool);
+                    narrate_tool_completion(&tool)
+                } else {
+                    narrate_tool_progress(&tool, &label)
+                };
 
-                // Send verbal narration so TTS can speak it aloud
-                let narration = format!("{} ", narrated_label);
-                let tok_msg = serde_json::json!({"t": "tok", "d": narration}).to_string();
-                let _ = socket.send(Message::Text(tok_msg)).await;
-                // Also emit as a sentence for immediate TTS
-                let sent_msg = serde_json::json!({"t": "sent", "d": clean_for_tts(&narration)}).to_string();
-                let _ = socket.send(Message::Text(sent_msg)).await;
+                // Narration: spoken only, not mixed into visible response text
+                let narrate_msg = serde_json::json!({"t": "narrate", "d": clean_for_tts(&narration)}).to_string();
+                let _ = socket.send(Message::Text(narrate_msg)).await;
 
-                // Visual chip
                 let tool_msg = serde_json::json!({
                     "t": "tool",
                     "tool": tool,
                     "emoji": emoji,
-                    "label": narrated_label
+                    "label": label
                 })
                 .to_string();
                 if socket.send(Message::Text(tool_msg)).await.is_err() {
@@ -399,6 +422,7 @@ async fn stream_chat(
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     };
 
+    tracing::info!("→ {}", req.text);
     state
         .db
         .add_message(&session_id, "user", &req.text)
@@ -460,8 +484,24 @@ async fn stream_chat(
 
         let mut full_response = String::new();
         let mut sentence_buf = String::new();
+        let mut silence_narrated = false;
 
-        while let Some(item) = token_stream.next().await {
+        loop {
+            let item = match tokio_timeout(Duration::from_secs(2), token_stream.next()).await {
+                Ok(Some(item)) => {
+                    silence_narrated = false;
+                    item
+                }
+                Ok(None) => break,
+                Err(_) => {
+                    if !silence_narrated {
+                        silence_narrated = true;
+                        yield Ok(Event::default().event("narrate").data("Un momento, procesando."));
+                    }
+                    continue;
+                }
+            };
+
             match item {
                 StreamItem::Token(token) => {
                     full_response.push_str(&token);
@@ -483,23 +523,26 @@ async fn stream_chat(
                         }
                     }
                 }
-                StreamItem::ToolProgress { tool, emoji, label } => {
-                    let narrated_label = narrate_tool_progress(&tool, &label);
+                StreamItem::ToolProgress { tool, emoji, label, status } => {
+                    let is_completed = status.as_deref() == Some("completed");
+                    let narration = if is_completed {
+                        tracing::info!("⚙ {} completado", tool);
+                        narrate_tool_completion(&tool)
+                    } else {
+                        narrate_tool_progress(&tool, &label)
+                    };
 
-                    // Verbal narration for TTS
-                    let narration = format!("{} ", narrated_label);
-                    yield Ok(Event::default().event("tok").data(narration.clone()));
+                    // Narration: spoken only, not mixed into visible response text
                     let clean = clean_for_tts(&narration);
                     if clean.len() > 1 {
-                        yield Ok(Event::default().event("sent").data(clean));
+                        yield Ok(Event::default().event("narrate").data(clean));
                     }
 
-                    // Visual chip
                     yield Ok(Event::default().event("tool").data(
                         serde_json::json!({
                             "tool": tool,
                             "emoji": emoji,
-                            "label": narrated_label
+                            "label": label
                         }).to_string(),
                     ));
                 }
@@ -605,65 +648,22 @@ fn replace_persistent_profile_block(system_prompt: &str, update: &str) -> String
     )
 }
 
-fn narrate_tool_progress(tool: &str, label: &str) -> String {
-    let detail = label.trim();
-    let detail_suffix = if detail.is_empty() {
-        String::new()
-    } else {
-        format!(": {}", detail)
-    };
-
+fn narrate_tool_progress(tool: &str, _label: &str) -> String {
     match tool {
-        "write_file" | "file.write" | "file_write" => {
-            if detail.is_empty() {
-                "Ahora voy a escribir el archivo".to_string()
-            } else {
-                format!("Ahora voy a escribir el archivo {}", detail)
-            }
-        }
-        "read_file" | "file.read" | "file_read" => {
-            if detail.is_empty() {
-                "Ahora voy a leer el archivo".to_string()
-            } else {
-                format!("Ahora voy a leer {}", detail)
-            }
-        }
-        "patch" | "apply_patch" | "file.patch" => {
-            format!("Ahora voy a modificar archivos{}", detail_suffix)
-        }
-        "terminal" | "shell" | "bash" | "process" => {
-            format!(
-                "Ahora voy a ejecutar un comando en terminal{}",
-                detail_suffix
-            )
-        }
-        "web_search" | "search" | "web" => {
-            format!("Ahora voy a buscar información en la web{}", detail_suffix)
-        }
-        "browser" | "navigate" | "click" | "type" => {
-            format!("Ahora voy a usar el navegador{}", detail_suffix)
-        }
-        "execute_code" | "code_execution" => {
-            format!("Ahora voy a ejecutar código{}", detail_suffix)
-        }
-        "vision" | "vision_analyze" => {
-            format!("Ahora voy a analizar la imagen{}", detail_suffix)
-        }
-        "image_generate" | "image_gen" => {
-            format!("Ahora voy a generar la imagen{}", detail_suffix)
-        }
-        "memory" | "memory.write" => {
-            format!("Ahora voy a guardar esto en memoria{}", detail_suffix)
-        }
-        "todo" => format!("Ahora voy a actualizar la lista de tareas{}", detail_suffix),
-        _ => {
-            if detail.is_empty() || detail == tool {
-                format!("Ahora voy a usar {}", tool)
-            } else {
-                format!("Ahora voy a usar {}: {}", tool, detail)
-            }
-        }
+        "write_file" | "file.write" | "file_write" => "Ahora voy a escribir el archivo.",
+        "read_file" | "file.read" | "file_read" => "Ahora voy a leer el archivo.",
+        "patch" | "apply_patch" | "file.patch" => "Ahora voy a modificar archivos.",
+        "terminal" | "shell" | "bash" | "process" => "Ahora voy a ejecutar un comando en terminal.",
+        "web_search" | "search" | "web" => "Ahora voy a buscar información en la web.",
+        "browser" | "navigate" | "click" | "type" => "Ahora voy a usar el navegador.",
+        "execute_code" | "code_execution" => "Ahora voy a ejecutar código.",
+        "vision" | "vision_analyze" => "Ahora voy a analizar la imagen.",
+        "image_generate" | "image_gen" => "Ahora voy a generar la imagen.",
+        "memory" | "memory.write" => "Ahora voy a guardar esto en memoria.",
+        "todo" => "Ahora voy a actualizar la lista de tareas.",
+        _ => "Procesando.",
     }
+    .to_string()
 }
 
 fn boxed_sse<S>(stream: S) -> Sse<Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>>>
