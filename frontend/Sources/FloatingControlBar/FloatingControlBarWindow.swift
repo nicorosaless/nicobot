@@ -1181,6 +1181,7 @@ class FloatingControlBarManager {
         pendingFollowUpQuery = nil
         chatCancellable?.cancel()
         chatCancellable = nil
+        activeFloatingProvider()?.onNarration = nil
         activeFloatingProvider()?.stopAgent()
         FloatingBarVoicePlaybackService.shared.stop()
     }
@@ -1588,6 +1589,12 @@ class FloatingControlBarManager {
         // in a shared provider that may already have many messages
         let messageCountBefore = provider.messages.count
 
+        // Wire narration callback — fires synchronously on @MainActor before tok events queue TTS
+        provider.onNarration = { [weak self] narration in
+            guard let self, self.isActiveQueryGeneration(generation) else { return }
+            FloatingBarVoicePlaybackService.shared.enqueueSentence(narration)
+        }
+
         // Observe messages for streaming response
         chatCancellable?.cancel()
         barWindow.state.currentAIMessage = nil
@@ -1605,12 +1612,10 @@ class FloatingControlBarManager {
 
                 // Store the full ChatMessage (preserves contentBlocks, tool calls, thinking)
                 barWindow?.state.currentAIMessage = aiMessage
-                if shouldPlayVoice {
-                    FloatingBarVoicePlaybackService.shared.updateStreamingResponseIfEnabled(
-                        aiMessage,
-                        isFinal: !aiMessage.isStreaming
-                    )
-                }
+                FloatingBarVoicePlaybackService.shared.updateStreamingResponseIfEnabled(
+                    aiMessage,
+                    isFinal: !aiMessage.isStreaming
+                )
 
                 if aiMessage.isStreaming {
                     barWindow?.state.isAILoading = false
@@ -1660,6 +1665,7 @@ class FloatingControlBarManager {
         // Leaving it alive lets later sidebar mutations overwrite the floating bar display.
         chatCancellable?.cancel()
         chatCancellable = nil
+        provider.onNarration = nil
 
         // Handle errors after sendMessage completes
         barWindow.state.isAILoading = false
@@ -1684,12 +1690,10 @@ class FloatingControlBarManager {
             }
         }
 
-        if shouldPlayVoice {
-            FloatingBarVoicePlaybackService.shared.updateStreamingResponseIfEnabled(
-                barWindow.state.currentAIMessage,
-                isFinal: true
-            )
-        }
+        FloatingBarVoicePlaybackService.shared.updateStreamingResponseIfEnabled(
+            barWindow.state.currentAIMessage,
+            isFinal: true
+        )
     }
 
     private func notificationContextSuffixIfNeeded(for message: String) -> String? {

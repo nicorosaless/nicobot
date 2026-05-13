@@ -47,16 +47,6 @@ struct FloatingControlBarView: View {
             // Transcript panel — white frosted glass
             if state.isTranscriptExpanded && state.showingAIConversation {
                 conversationView
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(.white)
-                            .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5)
-                    )
                     .padding(.horizontal, 8)
                     .padding(.bottom, 8)
                     .transition(.move(edge: .top).combined(with: .opacity))

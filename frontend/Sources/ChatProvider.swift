@@ -56,8 +56,10 @@ private struct ChatMessageResponse: Decodable {
 
 private struct ToolProgressPayload: Decodable {
     let tool: String
-    let emoji: String
-    let label: String
+    let emoji: String?
+    let label: String?
+    let status: String?
+    let toolCallId: String?
 }
 
 @MainActor
@@ -69,6 +71,8 @@ class ChatProvider: ObservableObject {
     @Published var backendHealthy = false
     @Published var hermesHealthy = false
     @Published var connectionMessage = "Comprobando servicios..."
+    /// Called synchronously on @MainActor when a narrate SSE event arrives.
+    var onNarration: ((String) -> Void)?
 
     // Legacy floating bar properties
     var isSending: Bool { isLoading }
@@ -77,6 +81,7 @@ class ChatProvider: ObservableObject {
     static var floatingBarSystemPromptPrefix: String { "Never use emojis in your responses. Your answers will be read aloud via text-to-speech, so write in plain natural language only." }
 
     private let baseURL = "http://127.0.0.1:10201"
+    private var lastHealthCheckDate: Date?
 
     func initialize() {
         Task {
@@ -86,6 +91,11 @@ class ChatProvider: ObservableObject {
     }
 
     func refreshConnectionStatus() async {
+        // Skip re-checking if both services were healthy recently
+        if let last = lastHealthCheckDate, backendHealthy, hermesHealthy,
+           Date().timeIntervalSince(last) < 30 {
+            return
+        }
         async let backend = checkJSONEndpoint("/health")
         async let hermes = checkJSONEndpoint("/v1/hermes/health")
 
@@ -96,10 +106,13 @@ class ChatProvider: ObservableObject {
 
         if backendOK && hermesOK {
             connectionMessage = "Backend y Hermes conectados"
+            lastHealthCheckDate = Date()
         } else if backendOK {
             connectionMessage = "Backend conectado, Hermes no responde"
+            lastHealthCheckDate = nil
         } else {
             connectionMessage = "Backend local no responde"
+            lastHealthCheckDate = nil
         }
     }
 
@@ -189,6 +202,8 @@ class ChatProvider: ObservableObject {
                     if currentEvent == "tok" {
                         await appendAssistantToken(currentData, at: idx)
                         tokenCount += 1
+                    } else if currentEvent == "narrate" {
+                        onNarration?(currentData)
                     } else if currentEvent == "tool" {
                         appendToolProgress(currentData, at: idx)
                     } else if currentEvent == "done" {
@@ -218,6 +233,8 @@ class ChatProvider: ObservableObject {
             if currentEvent == "tok" {
                 await appendAssistantToken(currentData, at: idx)
                 tokenCount += 1
+            } else if currentEvent == "narrate" {
+                onNarration?(currentData)
             } else if currentEvent == "tool" {
                 appendToolProgress(currentData, at: idx)
             }
@@ -306,10 +323,22 @@ class ChatProvider: ObservableObject {
         var updated = messages[index]
         markLastToolCallCompleted(in: &updated)
 
-        // Compact chip in contentBlocks for animated status indicator
-        let chipLabel = "\(payload.emoji) \(friendlyToolName(payload.tool))"
+        let emoji = payload.emoji ?? defaultToolEmoji(for: payload.tool)
+        let chipLabel = "\(emoji) \(friendlyToolName(payload.tool))"
         updated.contentBlocks.append(.toolCall(UUID(), chipLabel, "running"))
         messages[index] = updated
+    }
+
+    private func defaultToolEmoji(for tool: String) -> String {
+        let t = tool.lowercased()
+        if t.contains("browser") || t.contains("navigate") || t.contains("click") { return "🌐" }
+        if t.contains("terminal") || t.contains("bash") || t.contains("shell") { return "💻" }
+        if t.contains("search") || t.contains("web") { return "🔍" }
+        if t.contains("write") || t.contains("patch") { return "✏️" }
+        if t.contains("read") || t.contains("file") { return "📄" }
+        if t.contains("memory") { return "🧠" }
+        if t.contains("image") { return "🖼️" }
+        return "🔧"
     }
 
     private func friendlyToolName(_ tool: String) -> String {

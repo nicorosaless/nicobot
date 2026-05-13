@@ -15,11 +15,63 @@ final class FloatingBarVoicePlaybackService: NSObject, AVAudioPlayerDelegate {
     private var meterTimer: Timer?
     private var processedTextLength: Int = 0
     private var responseId = UUID()
+    private var audioCache: [String: Data] = [:]
+
+    static let narrationPhrases: [String] = [
+        // Silence timeout
+        "Un momento, procesando.",
+        // Tool progress (start) — must match narrate_tool_progress in backend/src/routes/chat.rs
+        "Ahora voy a escribir el archivo.",
+        "Ahora voy a leer el archivo.",
+        "Ahora voy a modificar archivos.",
+        "Ahora voy a ejecutar un comando en terminal.",
+        "Ahora voy a buscar información en la web.",
+        "Ahora voy a usar el navegador.",
+        "Ahora voy a ejecutar código.",
+        "Ahora voy a analizar la imagen.",
+        "Ahora voy a generar la imagen.",
+        "Ahora voy a guardar esto en memoria.",
+        "Ahora voy a actualizar la lista de tareas.",
+        "Procesando.",
+        // Tool completion — must match narrate_tool_completion in backend/src/hermes.rs
+        "Comando ejecutado.",
+        "Búsqueda completada.",
+        "He navegado a la web.",
+        "He terminado con el navegador.",
+        "Archivo guardado.",
+        "Archivo leído.",
+        "Memoria actualizada.",
+        "Código ejecutado.",
+        "Listo.",
+    ]
 
     private override init() { super.init() }
 
     func configure(barState: FloatingControlBarState) {
         self.barState = barState
+        prewarmNarrationCache()
+    }
+
+    private func prewarmNarrationCache() {
+        Task {
+            // First pass — Kokoro may still be loading, failures are silently retried below
+            for phrase in Self.narrationPhrases {
+                guard audioCache[phrase] == nil else { continue }
+                if let data = try? await synthesizePhrase(phrase), !data.isEmpty {
+                    audioCache[phrase] = data
+                }
+            }
+        }
+        // Retry after 8s in case Kokoro was still loading on first pass
+        Task {
+            try? await Task.sleep(for: .seconds(8))
+            let uncached = Self.narrationPhrases.filter { audioCache[$0] == nil }
+            for phrase in uncached {
+                if let data = try? await synthesizePhrase(phrase), !data.isEmpty {
+                    audioCache[phrase] = data
+                }
+            }
+        }
     }
 
     // MARK: - Public interface
@@ -72,6 +124,14 @@ final class FloatingBarVoicePlaybackService: NSObject, AVAudioPlayerDelegate {
         responseId = UUID()
     }
 
+    func enqueueSentence(_ text: String) {
+        guard ShortcutSettings.shared.hasAnyFloatingBarVoiceAnswersEnabled else { return }
+        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleaned.count > 1 else { return }
+        sentenceQueue.append(cleaned)
+        startSynthesisLoopIfNeeded()
+    }
+
     func playVoiceSample(voiceID: String) {
         interruptCurrentResponse()
         let sampleText = "Hello, I'm your AI assistant. How can I help you today?"
@@ -93,19 +153,15 @@ final class FloatingBarVoicePlaybackService: NSObject, AVAudioPlayerDelegate {
                 self.sentenceQueue.removeFirst()
 
                 do {
-                    let request = APIClient.TtsSynthesizeRequest(
-                        text: sentence,
-                        voiceId: ShortcutSettings.shared.selectedVoiceID,
-                        modelId: "eleven_multilingual_v2",
-                        outputFormat: "mp3_44100_128",
-                        voiceSettings: .init(
-                            stability: 0.5,
-                            similarityBoost: 0.75,
-                            style: 0.0,
-                            useSpeakerBoost: true
-                        )
-                    )
-                    let audioData = try await APIClient.shared.synthesizeSpeech(request: request)
+                    let audioData: Data
+                    if let cached = self.audioCache[sentence] {
+                        audioData = cached
+                    } else {
+                        audioData = try await self.synthesizePhrase(sentence)
+                        if !audioData.isEmpty {
+                            self.audioCache[sentence] = audioData
+                        }
+                    }
                     guard self.responseId == currentResponseId, !Task.isCancelled else { break }
 
                     if !audioData.isEmpty {
@@ -115,7 +171,8 @@ final class FloatingBarVoicePlaybackService: NSObject, AVAudioPlayerDelegate {
                         }
                     }
                 } catch {
-                    break
+                    print("[TTS] Synthesis failed, skipping sentence: \(error)")
+                    continue
                 }
             }
 
@@ -123,6 +180,17 @@ final class FloatingBarVoicePlaybackService: NSObject, AVAudioPlayerDelegate {
                 self.synthesisTask = nil
             }
         }
+    }
+
+    private func synthesizePhrase(_ text: String) async throws -> Data {
+        let request = APIClient.TtsSynthesizeRequest(
+            text: text,
+            voiceId: ShortcutSettings.shared.selectedVoiceID,
+            modelId: "eleven_multilingual_v2",
+            outputFormat: "mp3_44100_128",
+            voiceSettings: .init(stability: 0.5, similarityBoost: 0.75, style: 0.0, useSpeakerBoost: true)
+        )
+        return try await APIClient.shared.synthesizeSpeech(request: request)
     }
 
     // MARK: - Playback
