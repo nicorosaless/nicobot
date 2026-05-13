@@ -51,6 +51,8 @@ struct KokoroRequest {
     voice: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     speed: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language: Option<String>,
 }
 
 async fn try_chatterbox(
@@ -105,7 +107,7 @@ async fn try_chatterbox(
         }
     };
 
-    tracing::info!(
+    tracing::debug!(
         "TTS served via Chatterbox ({} bytes)",
         audio_bytes.len()
     );
@@ -135,6 +137,7 @@ async fn try_kokoro(
         text: req.text.clone(),
         voice: None,
         speed: None,
+        language: Some("es".to_string()),
     };
 
     let resp = match client.post(&url).json(&body).send().await {
@@ -164,7 +167,7 @@ async fn try_kokoro(
         }
     };
 
-    tracing::info!(
+    tracing::debug!(
         "TTS served via Kokoro ({} bytes)",
         audio_bytes.len()
     );
@@ -215,7 +218,7 @@ async fn try_elevenlabs(
 
     let audio_bytes = resp.bytes().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
 
-    tracing::info!("TTS served via ElevenLabs ({} bytes)", audio_bytes.len());
+    tracing::debug!("TTS served via ElevenLabs ({} bytes)", audio_bytes.len());
 
     Ok(Response::builder()
         .status(StatusCode::OK)
@@ -235,7 +238,7 @@ async fn synthesize(
         match kokoro_result {
             Ok(response) => return Ok(response),
             Err(StatusCode::BAD_GATEWAY) => {
-                tracing::info!("Kokoro failed; trying ElevenLabs fallback");
+                tracing::debug!("Kokoro failed; trying ElevenLabs fallback");
             }
             Err(other) => return Err(other),
         }
